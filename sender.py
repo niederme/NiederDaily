@@ -1,6 +1,9 @@
 import base64
+import logging
 from email.mime.multipart import MIMEMultipart
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
@@ -36,4 +39,5 @@ def send_email(msg: MIMEMultipart, client_secret_path: str, token_path: str) -> 
         service.users().messages().send(userId="me", body={"raw": raw}).execute()
         return True
     except Exception:
+        log.exception("Gmail send failed")
         return False
