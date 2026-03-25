@@ -91,7 +91,7 @@ def weather_block(config: dict, calendar_events: list) -> dict | None:
         # Check if it's a different city (rough: compare display name vs default name)
         if default["name"].split(",")[0].lower() not in geo["name"].lower():
             travel = fetch_weather(geo["lat"], geo["lon"], geo["name"].split(",")[0].strip())
-            travel_city = geo["name"]
+            travel_city = geo["name"].split(",")[0].strip()
             break
 
     locations = [home]

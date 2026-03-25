@@ -1,5 +1,4 @@
 import pytest
-from unittest.mock import patch, MagicMock
 
 from modules.weather import fetch_weather, geocode_location, wmo_label, weather_block
 
@@ -66,7 +65,7 @@ def test_weather_block_with_travel(requests_mock):
     events = [{"title": "Meeting", "location": "New York, NY", "all_day": False, "start": "9:00am"}]
     result = weather_block(config, calendar_events=events)
     assert len(result["locations"]) == 2
-    assert result["travel_city"] == "New York, NY, USA"
+    assert result["travel_city"] == "New York"
 
 def test_weather_block_returns_none_on_failure(requests_mock):
     requests_mock.get("https://api.open-meteo.com/v1/forecast", status_code=500)
