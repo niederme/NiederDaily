@@ -38,7 +38,7 @@ def fetch_weather(lat: float, lon: float, name: str) -> dict | None:
             "current": "temperature_2m,weathercode",
             "daily": "temperature_2m_max,temperature_2m_min,sunrise,sunset",
             "temperature_unit": "fahrenheit",
-            "timezone": "America/New_York",
+            "timezone": "auto",
             "forecast_days": 1,
         }, timeout=10)
         resp.raise_for_status()

@@ -32,7 +32,7 @@ body{margin:0;padding:0;background:#f0ede8;font-family:-apple-system,'Helvetica 
 
 
 def _label(text: str) -> str:
-    return f'<div style="{SECTION_LABEL_STYLE}">{text}</div>'
+    return f'<div style="{SECTION_LABEL_STYLE}">{_esc(text)}</div>'
 
 
 def _section(label: str, content: str) -> str:
@@ -42,7 +42,7 @@ def _section(label: str, content: str) -> str:
 def _weather_html(data: dict) -> str:
     parts = []
     for loc in data["locations"]:
-        label = f"WEATHER · {_esc(loc['location']).upper()}"
+        label = f"WEATHER · {loc['location'].upper()}"
         body = (
             f'<div style="font-size:32px;font-weight:200;color:#1a1a1a;letter-spacing:-0.02em;">'
             f'{loc["temp"]}°&thinsp; {_esc(loc["condition"])}</div>'
@@ -195,10 +195,12 @@ def render_email(
     msg.attach(html_part)
 
     if photo:
-        img_bytes, _ = photo
-        img_part = MIMEImage(img_bytes, _subtype="jpeg")
+        img_bytes, img_meta = photo
+        img_fmt = img_meta.get("format", "jpeg")  # e.g. "jpeg", "heic", "png"
+        img_ext = "jpg" if img_fmt in ("jpeg", "jpg") else img_fmt
+        img_part = MIMEImage(img_bytes, _subtype=img_fmt)
         img_part.add_header("Content-ID", "<onthisday>")
-        img_part.add_header("Content-Disposition", "inline", filename="onthisday.jpg")
+        img_part.add_header("Content-Disposition", "inline", filename=f"onthisday.{img_ext}")
         msg.attach(img_part)
 
     return msg

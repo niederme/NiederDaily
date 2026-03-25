@@ -75,7 +75,7 @@ def _safe(fn, *args, **kwargs):
     try:
         return fn(*args, **kwargs)
     except Exception as e:
-        logging.warning(f"Module {fn.__name__} failed: {e}")
+        logging.warning(f"Module {fn.__name__} failed: {e}", exc_info=True)
         return None
 
 

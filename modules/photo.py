@@ -97,7 +97,9 @@ def photo_block() -> tuple | None:
             if not exported_files:
                 return None
 
-            img_bytes = exported_files[0].read_bytes()
+            exported = exported_files[0]
+            img_bytes = exported.read_bytes()
+            img_suffix = exported.suffix.lower().lstrip(".")  # e.g. "jpg", "heic", "png"
 
         year = chosen["date"][:4] if chosen["date"] else ""
         meta = {
@@ -105,6 +107,7 @@ def photo_block() -> tuple | None:
             "date": chosen["date"],
             "location": chosen["location"],
             "is_favorite": chosen["is_favorite"],
+            "format": img_suffix or "jpeg",
         }
         return (img_bytes, meta)
 
