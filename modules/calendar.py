@@ -39,6 +39,23 @@ return output
 """
 
 
+def _time_sort_key(event):
+    """Parse time string and return minutes since midnight for sorting."""
+    t = event.get("time") or ""
+    try:
+        h, rest = t.split(":")
+        m = int(rest[:2])
+        ampm = rest[2:].lower()
+        h = int(h)
+        if ampm == "pm" and h != 12:
+            h += 12
+        elif ampm == "am" and h == 12:
+            h = 0
+        return h * 60 + m
+    except Exception:
+        return 0
+
+
 def calendar_block() -> list | None:
     try:
         result = subprocess.run(
@@ -58,14 +75,15 @@ def calendar_block() -> list | None:
             location = parts[2].strip() if len(parts) > 2 else ""
             if not title:
                 continue
+            time_val = time_str if time_str else None
             events.append({
-                "time": time_str if time_str else None,
+                "time": time_val,
                 "title": title,
                 "location": location,
-                "all_day": time_str == "",
+                "all_day": time_val is None,
             })
-        # Sort: timed events by time string, all-day last
-        timed = [e for e in events if not e["all_day"]]
+        # Sort: timed events chronologically, all-day last
+        timed = sorted([e for e in events if not e["all_day"]], key=_time_sort_key)
         all_day = [e for e in events if e["all_day"]]
         return timed + all_day
     except Exception:

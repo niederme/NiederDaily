@@ -31,3 +31,11 @@ def test_calendar_block_returns_empty_list_when_no_events(mocker):
     mock_run.return_value = MagicMock(returncode=0, stdout="\n")
     result = calendar_block()
     assert result == []
+
+def test_calendar_block_sorts_timed_events_chronologically(mocker):
+    out_of_order = "10:00am|Late meeting|\n9:00am|Early standup|\n"
+    mock_run = mocker.patch("modules.calendar.subprocess.run")
+    mock_run.return_value = MagicMock(returncode=0, stdout=out_of_order)
+    result = calendar_block()
+    assert result[0]["title"] == "Early standup"
+    assert result[1]["title"] == "Late meeting"
