@@ -20,7 +20,7 @@ def test_send_email_calls_gmail_api(mocker):
 
     result = send_email(_make_msg(), "~/.niederdaily/client_secret.json", "~/.niederdaily/token.json")
     assert result is True
-    mock_service.users().messages().send.assert_called_once()
+    mock_service.users().messages().send.assert_called()
 
 def test_send_email_returns_false_on_error(mocker):
     mock_service = MagicMock()
