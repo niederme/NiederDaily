@@ -2,6 +2,7 @@ from datetime import date
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
+from html import escape as _esc
 
 BADGE_OVERDUE = '<span style="display:inline-block;background:#fee2e2;color:#b91c1c;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-right:6px;">Overdue</span>'
 BADGE_TODAY   = '<span style="display:inline-block;background:#dbeafe;color:#1d4ed8;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-right:6px;">Today</span>'
@@ -41,12 +42,12 @@ def _section(label: str, content: str) -> str:
 def _weather_html(data: dict) -> str:
     parts = []
     for loc in data["locations"]:
-        label = f"WEATHER · {loc['location'].upper()}"
+        label = f"WEATHER · {_esc(loc['location']).upper()}"
         body = (
             f'<div style="font-size:32px;font-weight:200;color:#1a1a1a;letter-spacing:-0.02em;">'
-            f'{loc["temp"]}°&thinsp; {loc["condition"]}</div>'
+            f'{loc["temp"]}°&thinsp; {_esc(loc["condition"])}</div>'
             f'<div style="font-size:12px;color:#999;margin-top:4px;">'
-            f'High {loc["high"]}° · Low {loc["low"]}° · Sunrise {loc["sunrise"]} · Sunset {loc["sunset"]}</div>'
+            f'High {loc["high"]}° · Low {loc["low"]}° · Sunrise {_esc(loc["sunrise"])} · Sunset {_esc(loc["sunset"])}</div>'
         )
         parts.append(_section(label, body))
     return "".join(parts)
@@ -58,13 +59,13 @@ def _calendar_html(events: list) -> str:
         return _section("TODAY", body)
     rows = []
     for e in events:
-        time_str = e.get("time") or "All day"
-        loc = (f'<span style="font-size:11px;color:#bbb;margin-left:6px;">· {e["location"]}</span>'
+        time_str = _esc(e.get("time") or "All day")
+        loc = (f'<span style="font-size:11px;color:#bbb;margin-left:6px;">· {_esc(e["location"])}</span>'
                if e.get("location") else "")
         rows.append(
             f'<div style="display:flex;gap:16px;align-items:baseline;margin-bottom:9px;">'
             f'<span style="font-size:11px;color:#bbb;min-width:36px;">{time_str}</span>'
-            f'<span style="font-size:13px;color:#1a1a1a;">{e["title"]}{loc}</span></div>'
+            f'<span style="font-size:13px;color:#1a1a1a;">{_esc(e["title"])}{loc}</span></div>'
         )
     return _section("TODAY", "".join(rows))
 
@@ -72,9 +73,9 @@ def _calendar_html(events: list) -> str:
 def _reminders_html(data: dict) -> str:
     rows = []
     for r in data.get("overdue", []):
-        rows.append(f'<div style="font-size:13px;color:#1a1a1a;margin-bottom:8px;">{BADGE_OVERDUE}{r["title"]}</div>')
+        rows.append(f'<div style="font-size:13px;color:#1a1a1a;margin-bottom:8px;">{BADGE_OVERDUE}{_esc(r["title"])}</div>')
     for r in data.get("today", []):
-        rows.append(f'<div style="font-size:13px;color:#1a1a1a;margin-bottom:8px;">{BADGE_TODAY}{r["title"]}</div>')
+        rows.append(f'<div style="font-size:13px;color:#1a1a1a;margin-bottom:8px;">{BADGE_TODAY}{_esc(r["title"])}</div>')
     for r in data.get("upcoming", []):
         try:
             from datetime import datetime
@@ -82,7 +83,7 @@ def _reminders_html(data: dict) -> str:
         except Exception:
             due = r["due"]
         badge = f'<span style="display:inline-block;background:#f3f4f6;color:#6b7280;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-right:6px;">{due}</span>'
-        rows.append(f'<div style="font-size:13px;color:#1a1a1a;margin-bottom:8px;">{badge}{r["title"]}</div>')
+        rows.append(f'<div style="font-size:13px;color:#1a1a1a;margin-bottom:8px;">{badge}{_esc(r["title"])}</div>')
     if not rows:
         return _section("REMINDERS", '<div style="font-size:13px;color:#bbb;">All clear.</div>')
     return _section("REMINDERS", "".join(rows))
@@ -94,8 +95,8 @@ def _messages_html(threads: list) -> str:
         badge = BADGE_REPLY if t["needs_reply"] else ""
         rows.append(
             f'<div class="msgrow">'
-            f'<div><div class="msgname">{t["name"]}</div>'
-            f'<div class="msgmeta">{t["count"]} message{"s" if t["count"] != 1 else ""} · last {t["last_time"]}</div></div>'
+            f'<div><div class="msgname">{_esc(t["name"])}</div>'
+            f'<div class="msgmeta">{t["count"]} message{"s" if t["count"] != 1 else ""} · last {_esc(t["last_time"])}</div></div>'
             f'{badge}</div>'
         )
     return _section("MESSAGES", "".join(rows))
@@ -105,14 +106,14 @@ def _nyt_html(stories: list) -> str:
     rows = []
     for s in stories:
         if s.get("thumbnail"):
-            img = f'<img class="nytthumb" src="{s["thumbnail"]}" alt="">'
+            img = f'<img class="nytthumb" src="{_esc(s["thumbnail"])}" alt="">'
         else:
             img = '<div class="nytthumb" style="background:#e5e7eb;"></div>'
         rows.append(
             f'<div class="nyt">{img}'
             f'<div><div class="nythed">'
-            f'<a href="{s["url"]}" style="color:#1a1a1a;text-decoration:none;">{s["title"]}</a></div>'
-            f'<div class="nytdek">{s["abstract"]}</div></div></div>'
+            f'<a href="{_esc(s["url"])}" style="color:#1a1a1a;text-decoration:none;">{_esc(s["title"])}</a></div>'
+            f'<div class="nytdek">{_esc(s["abstract"])}</div></div></div>'
         )
     return _section("IN THE NEWS", "".join(rows))
 
@@ -133,7 +134,7 @@ def render_email(
 
     welcome_html = ""
     if welcome:
-        welcome_html = f'<div class="welcome">"{welcome}"</div>'
+        welcome_html = f'<div class="welcome">"{_esc(welcome)}"</div>'
 
     sections = []
     if weather:
@@ -150,9 +151,9 @@ def render_email(
         _, meta = photo
         caption_parts = []
         if meta.get("location"):
-            caption_parts.append(meta["location"])
+            caption_parts.append(_esc(meta["location"]))
         if meta.get("date"):
-            caption_parts.append(meta["date"])
+            caption_parts.append(_esc(meta["date"]))
         if meta.get("is_favorite"):
             caption_parts.append("★ Favorite")
         caption = " · ".join(caption_parts)
@@ -188,7 +189,7 @@ def render_email(
     msg = MIMEMultipart("related")
     msg["Subject"] = subject
     msg["To"] = recipient
-    msg["From"] = recipient
+    msg["From"] = recipient  # self-addressed; Gmail API sets the actual sender via OAuth
 
     html_part = MIMEText(html, "html", "utf-8")
     msg.attach(html_part)
