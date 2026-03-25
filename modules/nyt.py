@@ -1,7 +1,7 @@
 import requests
 
 NYT_URL = "https://api.nytimes.com/svc/topstories/v2/home.json"
-PREFERRED_FORMATS = {"threeByTwoSmallAt2X", "mediumThreeByTwo210", "mediumThreeByTwo440"}
+PREFERRED_FORMATS = ["threeByTwoSmallAt2X", "mediumThreeByTwo210", "mediumThreeByTwo440"]
 
 
 def _pick_thumbnail(multimedia: list) -> str | None:

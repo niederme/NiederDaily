@@ -2,7 +2,7 @@ import subprocess
 from datetime import date, timedelta
 
 
-def _build_script(lists: list) -> str:
+def _build_script(lists: list | None) -> str:
     list_filter = ""
     if lists:
         quoted = ", ".join(f'"{l}"' for l in lists)
@@ -31,7 +31,7 @@ end pad
 """
 
 
-def reminders_block(lists: list) -> dict | None:
+def reminders_block(lists: list | None = None) -> dict | None:
     try:
         result = subprocess.run(
             ["osascript", "-e", _build_script(lists)],

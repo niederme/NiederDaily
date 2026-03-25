@@ -9,7 +9,9 @@ SYSTEM_PROMPT = (
 
 
 def welcome_block(api_key: str, weather_data: dict | None, calendar_events: list | None) -> str | None:
-    if weather_data is None and not calendar_events:
+    if not api_key:
+        return None
+    if not weather_data and not calendar_events:
         return None
     try:
         today = date.today()
