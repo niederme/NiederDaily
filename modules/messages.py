@@ -105,7 +105,8 @@ def messages_block() -> list | None:
                 name = handle if handle else "Unknown"
 
             last_msg = max(data["messages"], key=lambda m: m["timestamp"])
-            last_time = datetime.fromtimestamp(_apple_ts_to_unix(last_msg["timestamp"]))
+            last_unix = _apple_ts_to_unix(last_msg["timestamp"])
+            last_time = datetime.fromtimestamp(last_unix)
 
             result.append({
                 "name": name,
@@ -113,11 +114,15 @@ def messages_block() -> list | None:
                 "is_contact": is_contact,
                 "count": data["count"],
                 "last_time": last_time.strftime("%-I:%M%p").lower(),
+                "_last_ts": last_unix,
                 "needs_reply": needs_reply(data["messages"]),
             })
 
-        # Sort: contacts first, then by last message time descending
-        result.sort(key=lambda t: (not t["is_contact"], t["last_time"]))
+        # Sort: contacts first, then most recent message first
+        result.sort(key=lambda t: (not t["is_contact"], -t["_last_ts"]))
+        # Remove the internal sort key before returning
+        for t in result:
+            t.pop("_last_ts", None)
         return result if result else []
 
     except Exception:

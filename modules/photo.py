@@ -19,6 +19,7 @@ tell application "Photos"
             end try
             set fav to favorite of m
             set fc to 0
+            -- face_count is always 0 since Photos.app does not expose face count via AppleScript
             set output to output & (id of m) & "|" & yr & "-" & my pad(month of d as integer) & "-" & my pad(day of d as integer) & "|" & loc & "|" & fav & "|" & fc & "\\n"
         end if
     end repeat
@@ -42,13 +43,10 @@ return tmpPath
 
 
 def _select_best(photos: list) -> dict:
-    """Priority: favorite → has faces → oldest → random."""
+    """Priority: favorited photos first, then oldest by date."""
     favorites = [p for p in photos if p["is_favorite"]]
     if favorites:
         return min(favorites, key=lambda p: p["date"])
-    with_faces = [p for p in photos if p["face_count"] > 0]
-    if with_faces:
-        return min(with_faces, key=lambda p: p["date"])
     return min(photos, key=lambda p: p["date"])
 
 

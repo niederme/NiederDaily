@@ -12,13 +12,13 @@ def test_select_best_prefers_favorites():
     result = _select_best(photos)
     assert result["id"] == "2"
 
-def test_select_best_prefers_faces_over_oldest():
+def test_select_best_falls_back_to_oldest_when_no_favorites():
     photos = [
-        {"id": "1", "date": "2015-03-25", "location": "", "is_favorite": False, "face_count": 0},
-        {"id": "2", "date": "2020-03-25", "location": "", "is_favorite": False, "face_count": 2},
+        {"id": "1", "date": "2018-03-25", "location": "", "is_favorite": False, "face_count": 0},
+        {"id": "2", "date": "2015-03-25", "location": "", "is_favorite": False, "face_count": 2},
     ]
     result = _select_best(photos)
-    assert result["id"] == "2"
+    assert result["id"] == "2"  # oldest wins regardless of face_count
 
 def test_select_best_falls_back_to_oldest():
     photos = [
