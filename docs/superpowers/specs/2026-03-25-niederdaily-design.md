@@ -42,7 +42,7 @@ Fetches current conditions and today's forecast from **Open-Meteo** (free, no AP
 
 **Default location:** Warwick, NY (41.2512° N, 74.3607° W)
 
-**Travel detection:** Scans today's calendar events for a non-empty `location` field. Geocodes each location using the **Nominatim API** (`nominatim.openstreetmap.org/search`, free, no key required — must set a `User-Agent` header per their policy). If the resolved city differs from the default, fetches weather for that location too and renders both sections, labelled by city name. Gracefully skips travel detection if geocoding fails.
+**Travel detection:** Scans today's calendar events (sorted by start time) for the **first timed event** with a non-empty `location` field. Geocodes that single location using the **Nominatim API** (`nominatim.openstreetmap.org/search`, free, no key required — must set a `User-Agent` header per their policy). If the resolved city differs from the default, fetches weather for that city and renders both sections, labelled by city name. Only one travel location is ever shown (the first offsite timed event). The resolved travel city name is also passed to `welcome_block` if present. Gracefully skips travel detection if geocoding fails.
 
 **Displays:** Current temp (°F), condition label, high/low, sunrise/sunset.
 
@@ -58,7 +58,7 @@ Queries Calendar.app via AppleScript (`osascript`). Fetches all events for today
 
 ### 3. Welcome Line (`welcome_block`)
 
-Runs after `weather_block` and `calendar_block`. Calls Claude Haiku with a short prompt containing: day of week, date, weather temp + condition, and the title of the first timed calendar event (or nothing if the day is empty). Returns a single witty, warm sentence. Displayed in the dark header, italic, below the date.
+Runs after `weather_block` and `calendar_block`. Calls Claude Haiku with a short prompt containing: day of week, date, weather temp + condition, travel city if detected, and the title of the first timed calendar event (or nothing if the day is empty). Returns a single witty, warm sentence. Displayed in the dark header, italic, below the date.
 
 **Fallback:** Omit the line silently if the API call fails or inputs are unavailable.
 
@@ -84,10 +84,12 @@ Each item shows title and due date. Badges: red (Overdue), blue (Today), grey (C
 
 Reads directly from `~/Library/Messages/chat.db` (SQLite) rather than AppleScript, which lacks the necessary APIs on modern macOS. Requires **Full Disk Access** granted to Terminal (or the Python executable) in System Settings → Privacy & Security.
 
-Queries threads with messages in the last 24 hours. Filters to contacts only by cross-referencing `handle.id` (phone number or email) against the system Address Book via the `AddressBook` framework (accessed via `pyobjc`).
+Queries threads with messages in the last 24 hours. Filters to contacts only by cross-referencing `handle.id` (phone number or email) against the system Address Book via the `AddressBook` framework (accessed via `pyobjc`). Requires **Contacts access** granted in System Settings → Privacy & Security → Contacts.
+
+**Contacts fallback:** If the Address Book lookup is denied or unavailable, display threads using the raw handle (phone number or email) rather than dropping the section entirely.
 
 For each matching thread, displays:
-- Contact name (resolved via Address Book) or group name
+- Contact name (resolved via Address Book), raw handle (if lookup unavailable), or group name
 - Message count in the last 24 hours
 - Time of last message
 - **"Needs reply" badge** if: `message.is_from_me = 0` on the most recent message AND it's been >2 hours
@@ -106,7 +108,9 @@ Queries Photos.app via AppleScript for media items where the creation date's mon
 3. Oldest photo
 4. Random fallback from the pool
 
-The selected photo is exported by AppleScript to a **`tempfile.NamedTemporaryFile`** (opened with `delete=True`). The context manager must remain open across both the AppleScript export step and the MIME attachment construction — the file must not be closed until after `render_and_send()` has consumed the bytes. Practically: `photo.py` returns the raw image bytes (read before closing), so the temp file is fully scoped inside `photo_block` and callers never touch the filesystem directly. The photo is embedded in the email as a **MIME inline attachment** with a `Content-ID` header (`cid:onthisday`), referenced from the HTML body as `<img src="cid:onthisday">`. This approach is fully supported by Gmail.
+`photo_block` returns a `(bytes, metadata)` tuple. The temp file lifecycle is **fully internal** to `photo_block`: AppleScript exports the photo to a `NamedTemporaryFile`, Python reads the bytes, the file is closed and deleted — all within the function. The caller receives raw image bytes and a metadata dict; it never touches the filesystem.
+
+The photo is embedded in the email as a **MIME inline attachment** with a `Content-ID` header (`cid:onthisday`), referenced from the HTML body as `<img src="cid:onthisday">`. This approach is fully supported by Gmail.
 
 Caption shows: location (if available from EXIF/Photos metadata), original date, and ★ if favorited.
 
@@ -148,11 +152,19 @@ Each story renders as: thumbnail image linked to the article, headline linked to
 
 ---
 
+## Runtime Environment
+
+`install.sh` creates a **repo-owned virtualenv** at `NiederDaily/.venv/` using the system Python 3. All dependencies from `requirements.txt` are installed into this venv at install time. The launchd plist hardcodes the path to `.venv/bin/python` (absolute path resolved during install). This isolates NiederDaily from system Python upgrades, Homebrew changes, and other projects.
+
+`install.sh` never installs or modifies the system Python.
+
+---
+
 ## Scheduling
 
 macOS `launchd` plist installed at `~/Library/LaunchAgents/me.nieder.daily.plist`. Configured with `StartCalendarInterval` at 06:00.
 
-`install.sh` writes the absolute path of the active Python interpreter (`$(which python3)`) into the plist's `ProgramArguments` key at install time, ensuring the correct interpreter and its installed packages are used.
+The plist `ProgramArguments` key uses the absolute path to `.venv/bin/python` and the absolute path to `niederdaily.py`, both resolved by `install.sh` at install time.
 
 Stdout/stderr logged to `~/.niederdaily/logs/niederdaily.log`.
 
@@ -172,12 +184,36 @@ Stdout/stderr logged to `~/.niederdaily/logs/niederdaily.log`.
 }
 ```
 
-`install.sh` responsibilities:
+---
+
+## Setup & First-Run Bootstrap
+
+Before the LaunchAgent is loaded, all interactive permission flows must be completed manually. `install.sh` handles environment setup; `niederdaily.py --preflight` handles permission validation.
+
+**`install.sh` responsibilities:**
 1. Creates `~/.niederdaily/` and `~/.niederdaily/logs/`
-2. Writes `config.json` template (with placeholder values)
-3. Generates the launchd plist with the active `python3` path baked in
-4. Installs the plist to `~/Library/LaunchAgents/` and loads it with `launchctl`
-5. Prints next steps: fill in config, run OAuth flow, grant Full Disk Access to Terminal
+2. Writes `config.json` template
+3. Creates `.venv/` and installs `requirements.txt` into it
+4. Generates the launchd plist with absolute paths to `.venv/bin/python` and `niederdaily.py`
+5. Prints next steps: fill in config, run `--preflight`, then load the LaunchAgent
+
+**`niederdaily.py --preflight` (run manually before first scheduled run):**
+
+Runs each integration interactively and reports pass/fail:
+- Triggers Calendar.app AppleScript to prompt Automation permission
+- Triggers Reminders.app AppleScript to prompt Automation permission
+- Triggers Photos.app AppleScript to prompt Automation permission
+- Attempts to read `chat.db` and reports whether Full Disk Access is granted
+- Attempts Address Book lookup and reports whether Contacts access is granted
+- Runs Gmail OAuth flow (opens browser for token grant)
+- Makes a test call to Open-Meteo and reports success
+- Makes a test call to Claude Haiku and reports success
+- Makes a test call to NYT API (if key is set) and reports success
+
+After preflight passes, the user manually loads the agent:
+```bash
+launchctl load ~/Library/LaunchAgents/me.nieder.daily.plist
+```
 
 ---
 
@@ -185,7 +221,8 @@ Stdout/stderr logged to `~/.niederdaily/logs/niederdaily.log`.
 
 - **Automation → Calendar:** for `calendar_block` and `reminders_block`
 - **Automation → Photos:** for `photo_block`
-- **Full Disk Access → Terminal** (or the Python binary): for `messages_block` (`chat.db`)
+- **Full Disk Access → Terminal** (or `.venv/bin/python`): for `messages_block` (`chat.db`)
+- **Contacts → Terminal** (or `.venv/bin/python`): for contact name resolution in `messages_block`
 
 ---
 
@@ -202,20 +239,20 @@ Stdout/stderr logged to `~/.niederdaily/logs/niederdaily.log`.
 
 ```
 NiederDaily/
-├── niederdaily.py          # Main entry point — orchestrates module calls in order
+├── niederdaily.py          # Main entry point — orchestrates module calls in order; --preflight mode
 ├── modules/
 │   ├── welcome.py          # Claude Haiku prompt + response parsing
 │   ├── weather.py          # Open-Meteo API + WMO code table + Nominatim geocoding
 │   ├── calendar.py         # AppleScript → Calendar.app
 │   ├── reminders.py        # AppleScript → Reminders.app
 │   ├── messages.py         # chat.db SQLite + pyobjc Address Book lookup
-│   ├── photo.py            # AppleScript → Photos.app + MIME attachment export
+│   ├── photo.py            # AppleScript → Photos.app; returns (bytes, metadata)
 │   └── nyt.py              # NYT Top Stories API
 ├── renderer.py             # Builds MIME multipart/related email from module data
 ├── sender.py               # Gmail API OAuth2 wrapper
 ├── config.py               # Loads and validates ~/.niederdaily/config.json
 ├── setup/
-│   ├── install.sh          # First-run setup: config, plist, launchctl
+│   ├── install.sh          # Creates venv, installs deps, writes config template, generates plist
 │   └── me.nieder.daily.plist.template
 └── requirements.txt
 ```
