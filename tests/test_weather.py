@@ -123,3 +123,36 @@ def test_weather_block_returns_none_on_failure(requests_mock):
     config = {"default_location": {"name": "Warwick, NY", "lat": 41.2512, "lon": -74.3607}}
     result = weather_block(config, calendar_events=[])
     assert result is None
+
+
+from unittest.mock import patch, MagicMock
+
+WEATHERKIT_CONFIG = {
+    "default_location": {"name": "Warwick, NY", "lat": 41.2512, "lon": -74.3607},
+    "anthropic_api_key": "test-anthropic-key",
+    "weatherkit": {
+        "team_id": "TEAMID1234",
+        "service_id": "com.niederme.weatherkit",
+        "key_id": "KEYID12345",
+        "key_file": "/fake/path/AuthKey.p8",
+    },
+}
+
+def test_make_jwt_correct_claims(tmp_path):
+    key_file = tmp_path / "AuthKey.p8"
+    key_file.write_text("fake-key")
+    cfg = {**WEATHERKIT_CONFIG, "weatherkit": {**WEATHERKIT_CONFIG["weatherkit"], "key_file": str(key_file)}}
+
+    with patch("modules.weather.jwt.encode", return_value="tok") as mock_encode:
+        from modules.weather import _make_jwt
+        result = _make_jwt(cfg)
+
+    assert result == "tok"
+    payload = mock_encode.call_args.args[0]
+    kwargs = mock_encode.call_args.kwargs
+    assert payload["iss"] == "TEAMID1234"
+    assert payload["sub"] == "com.niederme.weatherkit"
+    assert payload["exp"] - payload["iat"] == 1800
+    assert kwargs["algorithm"] == "ES256"
+    assert kwargs["headers"]["kid"] == "KEYID12345"
+    assert kwargs["headers"]["typ"] == "JWT"

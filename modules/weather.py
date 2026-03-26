@@ -1,6 +1,11 @@
+import jwt
+import time
+from pathlib import Path
 import requests
 from datetime import datetime
 from typing import Optional
+
+WEATHERKIT_URL = "https://weatherkit.apple.com/api/v1/weather/en"
 
 WMO_CODES = {
     0: "Clear Sky", 1: "Mainly Clear", 2: "Partly Cloudy", 3: "Overcast",
@@ -17,6 +22,18 @@ WMO_CODES = {
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 USER_AGENT = "NiederDaily/1.0 (personal newsletter)"
+
+
+def _make_jwt(config: dict) -> str:
+    wk = config["weatherkit"]
+    key = Path(wk["key_file"]).expanduser().read_text()
+    now = int(time.time())
+    return jwt.encode(
+        {"iss": wk["team_id"], "sub": wk["service_id"], "iat": now, "exp": now + 1800},
+        key,
+        algorithm="ES256",
+        headers={"kid": wk["key_id"], "typ": "JWT"},
+    )
 
 
 def wmo_label(code: int) -> str:
