@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import logging
 import subprocess
 import tempfile
@@ -430,8 +431,36 @@ def _applescript_photo_block() -> tuple | None:
         return None
 
 
+def _haiku_describe(img_bytes: bytes, img_fmt: str) -> str | None:
+    """Return a one-sentence AI description of the photo, or None on failure."""
+    try:
+        import anthropic
+        mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "heic": "image/jpeg",
+                "png": "image/png", "gif": "image/gif", "webp": "image/webp"}.get(img_fmt.lower(), "image/jpeg")
+        b64 = base64.standard_b64encode(img_bytes).decode()
+        client = anthropic.Anthropic()
+        msg = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=100,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image", "source": {"type": "base64", "media_type": mime, "data": b64}},
+                    {"type": "text", "text": "Describe this photo in one short sentence. Be specific and evocative. No preamble."},
+                ],
+            }],
+        )
+        return msg.content[0].text.strip()
+    except Exception:
+        log.warning("Haiku image description failed", exc_info=True)
+        return None
+
+
 def photo_block() -> tuple | None:
-    native_result = _native_photo_block()
-    if native_result is not None:
-        return native_result
-    return _applescript_photo_block()
+    result = _native_photo_block() or _applescript_photo_block()
+    if result is None:
+        return None
+    img_bytes, meta = result
+    if not meta.get("description"):
+        meta["description"] = _haiku_describe(img_bytes, meta.get("format", "jpeg"))
+    return (img_bytes, meta)

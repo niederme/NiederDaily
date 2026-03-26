@@ -1,0 +1,291 @@
+# WeatherKit Migration Design
+
+**Date:** 2026-03-26
+**Status:** Approved
+
+## Overview
+
+Replace Open-Meteo with Apple WeatherKit REST API as the weather data source for NiederDaily. This yields richer condition codes, emoji icons, Haiku-generated weather sentences, and structured severe weather alerts.
+
+## Goals
+
+- Swap Open-Meteo for WeatherKit with no regression in existing data (temp, high/low, sunrise/sunset)
+- Add emoji icon per weather condition
+- Replace raw condition label with a Haiku-generated natural language sentence
+- Surface active weather alerts as a linked banner in the email
+- Keep the return dict interface stable so the welcome module and orchestrator need minimal changes
+
+## Out of Scope
+
+- Minute-by-minute precipitation forecast
+- Historical weather averages
+- Air quality data
+- Provider abstraction / fallback to Open-Meteo
+
+---
+
+## 1. Apple Developer Setup (one-time, manual)
+
+Before any code runs, the following must be configured in the Apple Developer portal:
+
+1. Create a **Service ID** (e.g. `com.niederme.weatherkit`) under Certificates, Identifiers & Profiles
+2. Enable the **WeatherKit** capability on that Service ID
+3. Create a **private key** with WeatherKit enabled → download the `.p8` file
+4. Note: **Team ID**, **Service ID**, **Key ID**
+
+These four values, plus the path to the `.p8` file, are added to `config.json`.
+
+---
+
+## 2. Configuration (`config.json`)
+
+The app loads `~/.niederdaily/config.json` via `config.py`. Add a top-level `"weatherkit"` key:
+
+```json
+{
+  "weatherkit": {
+    "team_id": "XXXXXXXXXX",
+    "service_id": "com.niederme.weatherkit",
+    "key_id": "XXXXXXXXXX",
+    "key_file": "~/.credentials/AuthKey_XXXXXXXXXX.p8"
+  }
+}
+```
+
+`config.py` must be updated to validate these four required keys at startup (alongside existing required keys).
+
+The existing `default_location` block (`name`, `lat`, `lon`) is unchanged.
+
+---
+
+## 3. `modules/weather.py` — Full Rewrite
+
+### JWT Generation
+
+A fresh JWT is generated on every newsletter run (no caching needed for once-daily use).
+
+- Algorithm: ES256
+- Header: `alg=ES256`, `kid=key_id`, `typ=JWT`
+- Claims: `iss=team_id`, `sub=service_id`, `iat=now`, `exp=now+30min`
+- Signed with the private key loaded from the `.p8` file
+
+**Clock sync note:** Apple validates `iat` against server time. macOS syncs via NTP by default; no action needed for launchd runs. If ever running in CI or a VM, verify NTP is active to avoid 401s from clock skew.
+
+Dependency: `PyJWT` with `cryptography` extras (added to `requirements.txt`).
+
+### API Call
+
+Single request fetching all needed datasets, requesting imperial units to avoid manual conversion:
+
+```
+GET https://weatherkit.apple.com/api/v1/weather/en/{lat}/{lon}
+    ?dataSets=currentWeather,forecastDaily,weatherAlerts
+    &unitSystem=imperial
+    &countryCode=US
+    Authorization: Bearer <token>
+```
+
+**Note:** `countryCode` is required by Apple for the `weatherAlerts` dataset to be populated. Without it, the alerts array will be empty even in supported regions. Hardcoded to `US` for this personal use case; could be made configurable if needed later.
+
+### Data Extraction
+
+| Field | Source | Notes |
+|-------|--------|-------|
+| `temp` | `currentWeather.temperature` | Fahrenheit float → `round()` → int |
+| `condition` | `currentWeather.conditionCode` | mapped to display label via `CONDITION_LABELS` |
+| `icon` | `currentWeather.conditionCode` | mapped to emoji via `CONDITION_ICONS` |
+| `high` | `forecastDaily.days[0].temperatureMax` | Fahrenheit float → `round()` → int |
+| `low` | `forecastDaily.days[0].temperatureMin` | Fahrenheit float → `round()` → int |
+| `sunrise` | `forecastDaily.days[0].sunrise` | RFC 3339 timestamp → "H:MMam" |
+| `sunset` | `forecastDaily.days[0].sunset` | RFC 3339 timestamp → "H:MMpm" |
+| `alerts` | `weatherAlerts.alerts` | list, may be empty; key may be absent (unsupported regions) |
+
+**Sunrise/sunset parsing:** WeatherKit returns RFC 3339 timestamps with timezone offset (e.g. `"2026-03-25T06:52:00-05:00"`). `datetime.fromisoformat()` (Python 3.11+) handles this correctly. The existing `_fmt_time` helper must be updated to accept these strings.
+
+**Weather alerts availability:** The `weatherAlerts` key is only present in the response for supported regions (primarily US). Always use `data.get("weatherAlerts", {}).get("alerts", [])` — never direct key access.
+
+### Condition Code → Label Mapping
+
+`CONDITION_LABELS` maps WeatherKit condition codes to human-readable strings used by `welcome.py` and passed to the renderer's existing `_weather_icon()` SVG function. No separate emoji dict is needed — `_weather_icon(condition)` already keyword-matches on the label string ("rain", "snow", "thunder", "clear", "fog") and works with WeatherKit label strings without modification.
+
+```python
+CONDITION_LABELS = {
+    "Clear": "Clear",
+    "MostlyClear": "Mostly Clear",
+    "PartlyCloudy": "Partly Cloudy",
+    "MostlyCloudy": "Mostly Cloudy",
+    "Cloudy": "Cloudy",
+    "Foggy": "Foggy",
+    "Haze": "Hazy",
+    "Smoky": "Smoky",
+    "Breezy": "Breezy",
+    "Windy": "Windy",
+    "Drizzle": "Drizzle",
+    "Rain": "Rain",
+    "HeavyRain": "Heavy Rain",
+    "SunShowers": "Sun Showers",
+    "Thunderstorms": "Thunderstorms",
+    "IsolatedThunderstorms": "Isolated Thunderstorms",
+    "ScatteredThunderstorms": "Scattered Thunderstorms",
+    "StrongStorms": "Strong Storms",
+    "Flurries": "Flurries",
+    "Snow": "Snow",
+    "SunFlurries": "Sun Flurries",
+    "Sleet": "Sleet",
+    "WintryMix": "Wintry Mix",
+    "FreezingDrizzle": "Freezing Drizzle",
+    "FreezingRain": "Freezing Rain",
+    "BlowingSnow": "Blowing Snow",
+    "HeavySnow": "Heavy Snow",
+    "Blizzard": "Blizzard",
+    "BlowingDust": "Blowing Dust",
+    "Frigid": "Frigid",
+    "Hail": "Hail",
+    "Hot": "Hot",
+    "Hurricane": "Hurricane",
+    "TropicalStorm": "Tropical Storm",
+}
+
+}
+```
+
+Unknown condition codes fall back to `"Unknown"`.
+
+### Return Dict
+
+`fetch_weather()` returns a per-location dict. `weather_block()` wraps these in the same top-level shape `welcome.py` depends on:
+
+```python
+{
+    "locations": [<per-location dict>, ...],  # welcome.py reads locations[0]
+    "travel_city": str | None,                # welcome.py reads this directly
+}
+```
+
+The per-location dict has the same keys as today, with two additions (`alerts`, `sentence`) and renames `summary` → `sentence`:
+
+```python
+{
+    "location": str,       # location display name
+    "temp": int,           # current temp in °F
+    "condition": str,      # human-readable label, e.g. "Partly Cloudy" — used by welcome.py and _weather_icon()
+    "high": int,           # daily high in °F
+    "low": int,            # daily low in °F
+    "sunrise": str,        # e.g. "6:52am"
+    "sunset": str,         # e.g. "7:31pm"
+    "alerts": list[dict],  # [] when none active or region unsupported
+    "sentence": str,       # Haiku-generated sentence — home location only; "" for travel
+}
+```
+
+Each alert dict:
+
+```python
+{
+    "event": str,      # e.g. "Winter Storm Warning"
+    "expires": str,    # formatted, e.g. "Thu 6:00pm"
+    "agency": str,     # e.g. "NWS Chicago"
+    "url": str,        # link to full alert (from WeatherKit detailsUrl field)
+}
+```
+
+### Error Handling
+
+On any failure (network, auth, bad response), `fetch_weather()` returns `None` — same behavior as today. The orchestrator already handles `None` gracefully.
+
+---
+
+## 4. Haiku Sentence — generated in `niederdaily.py`, not `weather_block`
+
+`weather_block` is called **twice** in `niederdaily.py` (once before calendar, once after for travel detection). Generating the Haiku sentence inside `weather_block` would burn two model calls per run and discard the first. Instead:
+
+- `weather_block` always returns `sentence: ""` for all locations
+- A new exported function `weather_sentence(loc: dict, api_key: str) -> str` lives in `modules/weather.py`
+- `niederdaily.py` calls it **once**, after the final `weather_block` result is known, mutating `weather["locations"][0]["sentence"]`
+
+**Failure semantics:** `weather_sentence` catches all exceptions and returns `""`. A Haiku outage degrades gracefully — the sentence is omitted from the email, but the weather section still renders. A sentence failure never causes `weather_block` to return `None`.
+
+**Prompt (approximate):**
+
+> "Write a single short sentence describing today's weather for {location}. Current: {temp}°F, {condition}. High {high}°, Low {low}°. Be specific and vivid. No greeting. Plain text only."
+
+**Example output:** `"Bundle up — snow likely this afternoon with temperatures dropping to 28°."`
+
+---
+
+## 5. `renderer.py` — Weather Section Updates
+
+### Updated layout:
+
+```
+WEATHER · CHICAGO
+
+⛅ 48°
+Bundle up — expect afternoon showers clearing by evening.
+High 52° · Low 41° · Sunrise 6:14am · Sunset 7:22pm
+
+⚠ FLOOD WATCH →
+Until Thu 6:00pm · NWS Chicago
+
+Weather
+```
+
+### Changes to `_weather_html()`:
+
+- **Big line**: icon + temp only (condition label removed from display)
+- **Sentence line**: Haiku-generated sentence (`loc["sentence"]`), smaller font, below the temp; omitted if empty string (travel locations)
+- **Metadata line**: High/Low · Sunrise · Sunset (unchanged)
+- **Alert banner** (only when `loc["alerts"]` is non-empty): rendered below metadata
+  - `⚠ {event}` as a linked anchor (`href=alert["url"]`) — links to the provider's full alert page; the banner is a summary only and does not rewrite or replace the provider's official alert content
+  - Expiry and agency in smaller text below
+  - Styled with inline CSS amber/red accent (e.g. `style="color:#c0392b;font-weight:600;"`) — email clients require all styles to be inline; no `<style>` blocks
+- **Attribution**: small linked "Weather" line at bottom per Apple requirement (`href="https://weatherkit.apple.com/legal-attribution.html"`)
+
+---
+
+## 6. `niederdaily.py` — Preflight Update
+
+The existing preflight check tests Open-Meteo connectivity. This must be replaced with a WeatherKit connectivity check: generate a JWT and make a lightweight availability call to `GET /api/v1/availability/{lat}/{lon}` to confirm credentials and network access are working.
+
+---
+
+## 7. `tests/test_weather.py` — Updates
+
+- Replace Open-Meteo mock responses with WeatherKit mock JSON responses
+- Add test for JWT generation: mock signing, assert header includes `typ=JWT`, assert claims (`iss`, `sub`, `iat`, `exp`)
+- Add tests for `CONDITION_LABELS` and `CONDITION_ICONS` mappings (known and unknown codes)
+- Add tests for alert parsing, including absent `weatherAlerts` key (unsupported region)
+- Add test for graceful `None` return on API failure
+- Add test for Haiku sentence: mock the Anthropic call, assert `"sentence"` key present for home location and `""` for travel location
+- Add test for RFC 3339 sunrise/sunset parsing via updated `_fmt_time`
+
+---
+
+## 8. Attribution (Apple Requirement)
+
+Apple requires displaying the "Weather" trademark as a link when showing WeatherKit data. Rendered at the bottom of every weather section:
+
+```html
+<a href="https://weatherkit.apple.com/legal-attribution.html">Weather</a>
+```
+
+---
+
+## Dependencies
+
+- `PyJWT[cryptography]` — JWT generation with ES256 (new)
+- No other new dependencies; `requests` already in use
+
+---
+
+## Files Changed
+
+| File | Change |
+|------|--------|
+| `~/.niederdaily/config.json` (user config) | Add `"weatherkit"` block |
+| `config.py` | Validate new `weatherkit.*` required keys |
+| `modules/weather.py` | Full rewrite |
+| `renderer.py` | Update `_weather_html()` |
+| `niederdaily.py` | Update preflight to test WeatherKit connectivity |
+| `tests/test_weather.py` | Update mocks and add new test cases |
+| `requirements.txt` | Add `PyJWT[cryptography]` |

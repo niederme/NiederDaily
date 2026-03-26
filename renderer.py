@@ -60,13 +60,10 @@ a{color:#121212;}
 .nytdek{font-size:13px;color:#474a51;line-height:1.42;}
 .nytbyline{font-size:11px;color:#474a51;line-height:1.4;margin-top:7px;}
 .photo-module{max-width:520px;margin:0 auto;}
-.photo-date{font-size:13px;line-height:1.4;color:#474a51;margin-bottom:12px;}
 .photo-frame{display:block;border-radius:14px;overflow:hidden;border:1px solid rgba(214,208,198,0.7);background:#ffffff;line-height:0;}
 .photo-frame img{width:100%;display:block;}
 .photo-description{font-size:13px;line-height:1.45;color:#474a51;margin-top:10px;}
-.photo-meta{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-top:10px;font-size:11px;line-height:1.45;color:#6d7178;}
-.photo-keywords{font-size:11px;line-height:1.45;color:#6d7178;margin-top:6px;}
-.photo-open{color:#121212;text-decoration:none;border-bottom:1px solid rgba(18,18,18,0.4);}
+.photo-meta{margin-top:6px;font-size:12px;line-height:1.45;color:#6d7178;}
 .footer{padding:28px 40px 36px;font-size:11px;color:#474a51;border-top:1px solid rgba(214,208,198,0.8);background:#ffffff;}
 .footer a{color:#121212;text-decoration:none;border-bottom:1px solid rgba(18,18,18,0.65);}
 @media only screen and (max-width: 640px){
@@ -99,7 +96,6 @@ a{color:#121212;}
   .nythed{font-size:16px !important;margin-bottom:5px !important;}
   .nytdek{font-size:12px !important;line-height:1.45 !important;}
   .nytbyline{font-size:11px !important;margin-top:6px !important;}
-  .photo-date{font-size:12px !important;margin-bottom:10px !important;}
   .photo-meta{font-size:11px !important;gap:8px !important;}
 }
 """
@@ -187,17 +183,41 @@ def _weather_icon(condition: str) -> str:
 def _weather_html(data: dict) -> str:
     parts = []
     for loc in data["locations"]:
-        summary = ""
-        if loc.get("summary"):
-            summary = f'<div class="weather-summary">{_esc(loc["summary"])}</div>'
+        # sentence replaces summary — same CSS class, same position
+        sentence_html = ""
+        if loc.get("sentence"):
+            sentence_html = f'<div class="weather-summary">{_esc(loc["sentence"])}</div>'
+
+        # alert banner (inline styles — email client compatibility)
+        alert_html = ""
+        for alert in loc.get("alerts", []):
+            alert_html += (
+                f'<div style="margin-top:10px;padding:8px 0;border-top:1px solid rgba(214,208,198,0.6);">'
+                f'<div style="font-size:12px;font-weight:600;color:#ff453a;">'
+                f'⚠ <a href="{_esc(alert["url"])}" style="color:#ff453a;text-decoration:none;">'
+                f'{_esc(alert["event"])} →</a></div>'
+                f'<div style="font-size:11px;color:{MUTED};margin-top:2px;">'
+                f'Until {_esc(alert["expires"])} · {_esc(alert["agency"])}</div>'
+                f'</div>'
+            )
+
+        # attribution (Apple requirement — inline styles)
+        attribution_html = (
+            f'<div style="font-size:10px;color:#9aa0a6;margin-top:8px;">'
+            f'<a href="https://weatherkit.apple.com/legal-attribution.html" '
+            f'style="color:#9aa0a6;text-decoration:none;">Weather</a></div>'
+        )
+
         body = (
             f'<div class="weather-card">'
             f'<div class="module-place">{_esc(loc["location"])}</div>'
             f'<div class="display-line">'
             f'{_weather_icon(loc["condition"])}'
-            f'<span>{loc["high"]}° / {loc["low"]}°</span></div>'
-            f'{summary}'
-            f'<div class="weather-meta">Sunrise {_esc(loc["sunrise"])} · Sunset {_esc(loc["sunset"])}</div>'
+            f'<span>{loc["temp"]}°</span></div>'
+            f'{sentence_html}'
+            f'<div class="weather-meta">High {loc["high"]}° · Low {loc["low"]}° · Sunrise {_esc(loc["sunrise"])} · Sunset {_esc(loc["sunset"])}</div>'
+            f'{alert_html}'
+            f'{attribution_html}'
             f'</div>'
         )
         parts.append(_section(None, body, show_rule=False))
@@ -312,41 +332,25 @@ def _photo_html(photo: tuple, *, show_rule: bool = True) -> str:
     except Exception:
         pretty_date = raw_date or "Today"
 
-    meta_bits = []
+    meta_bits = [_esc(pretty_date)]
     if meta.get("location"):
         meta_bits.append(_esc(meta["location"]))
     if meta.get("is_favorite"):
         meta_bits.append("Favorite")
     meta_line = " · ".join(meta_bits)
-    description = meta.get("description") or meta.get("title")
+    description = meta.get("description")
     description_html = f'<div class="photo-description">{_esc(description)}</div>' if description else ""
-    keywords_html = ""
-    keywords = [keyword for keyword in meta.get("keywords", []) if keyword]
-    if keywords:
-        keywords_html = f'<div class="photo-keywords">Keywords: {_esc(", ".join(keywords[:6]))}</div>'
 
-    open_link = _shortcut_url(
-        "photo",
-        {
-            "id": meta.get("id"),
-            "date": meta.get("date"),
-            "year": meta.get("year"),
-            "location": meta.get("location"),
-            "title": meta.get("title"),
-            "favorite": bool(meta.get("is_favorite")),
-        },
-    )
-    open_html = '<span class="photo-open">Open in Photos</span>'
-    meta_html = f'<div class="photo-meta"><span>{meta_line}</span><span>{open_html}</span></div>' if meta_line else f'<div class="photo-meta"><span></span><span>{open_html}</span></div>'
+    keywords = meta.get("keywords") or []
+    keywords_html = (f'<div class="photo-meta">Keywords: {_esc(", ".join(keywords))}</div>'
+                     if keywords else "")
+    meta_html = f'<div class="photo-meta">{meta_line}</div>'
     body = (
         '<div class="photo-module">'
-        f'<div class="photo-date">{_esc(pretty_date)}</div>'
-        f'<a href="{_esc(open_link)}" style="color:inherit;text-decoration:none;display:block;">'
         '<div class="photo-frame"><img src="cid:onthisday" alt="On This Day photo"></div>'
         f'{description_html}'
         f'{meta_html}'
         f'{keywords_html}'
-        '</a>'
         '</div>'
     )
     return _section("On This Day", body, show_rule=show_rule)
