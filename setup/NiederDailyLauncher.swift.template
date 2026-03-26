@@ -45,8 +45,9 @@ func main() throws {
     environment["PATH"] = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
     environment["TMPDIR"] = tmpDir
     environment["NIEDERDAILY_LAUNCHED_FROM_APP"] = "1"
-    let launchMode = environment["NIEDERDAILY_MODE"] ?? "prompt"
-    if launchMode == "run" {
+    let launchArgs = CommandLine.arguments.dropFirst()
+    let shouldRun = launchArgs.contains("--run") || environment["NIEDERDAILY_MODE"] == "run"
+    if shouldRun {
         process.arguments = [scriptPath]
     } else {
         process.arguments = [scriptPath, "--preflight"]

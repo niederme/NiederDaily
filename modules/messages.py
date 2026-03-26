@@ -168,7 +168,7 @@ def _chat_has_column(con: sqlite3.Connection, table: str, column: str) -> bool:
 
 def _threads_from_db() -> list | None:
     try:
-        con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+        con = sqlite3.connect(f"file:{DB_PATH}?immutable=1", uri=True)
         con.row_factory = sqlite3.Row
     except Exception:
         log.warning("Unable to open Messages database at %s", DB_PATH, exc_info=True)
@@ -190,7 +190,7 @@ def _threads_from_db() -> list | None:
             JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
             JOIN chat c ON c.ROWID = cmj.chat_id
             LEFT JOIN handle h ON h.ROWID = m.handle_id
-            WHERE m.date > ?
+            WHERE m.date > ? AND m.is_from_me = 0
             ORDER BY m.date ASC
         """, (cutoff_apple,)).fetchall()
 

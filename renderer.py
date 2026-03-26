@@ -116,22 +116,20 @@ def _section(label: str | None, content: str, *, show_rule: bool = True) -> str:
 
 
 def _shortcut_url(item_type: str, payload: dict) -> str:
-    body = {"type": item_type, **payload}
-    return (
-        "shortcuts://run-shortcut"
-        f"?name={quote(SHORTCUT_NAME, safe='')}"
-        "&input=text"
-        f"&text={quote(json.dumps(body, separators=(',', ':')), safe='')}"
-    )
+    return ""
 
 
 def _linked_text(item_type: str, text: str, payload: dict) -> str:
     href = _shortcut_url(item_type, payload)
+    if not href:
+        return _esc(text)
     return f'<a class="item-link" href="{_esc(href)}">{_esc(text)}</a>'
 
 
 def _row_link(item_type: str, time_html: str, main_html: str, payload: dict) -> str:
     href = _shortcut_url(item_type, payload)
+    if not href:
+        return f'<div class="item-row">{time_html}{main_html}</div>'
     return f'<a class="item-row-link" href="{_esc(href)}">{time_html}{main_html}</a>'
 
 
