@@ -30,6 +30,24 @@ The shortcut receives JSON text input. Examples:
 2. Use `Get Dictionary from Input` to parse the JSON.
 3. Branch on `type`.
 
+### macOS shortcut
+
+The easiest Mac setup is a single `Run Shell Script` action:
+
+```bash
+/Users/niederme/~Repos/NiederDaily/.venv/bin/python /Users/niederme/~Repos/NiederDaily/setup/open_niederdaily_item.py "$SHORTCUT_INPUT"
+```
+
+That helper script already knows how to:
+
+- show the matching Calendar event
+- show the matching Reminder
+- spotlight the matching Photos item
+
+### iPhone/iPad shortcut
+
+Use `Get Dictionary from Input`, then branch by `type`.
+
 For `calendar`:
 
 - Use `Find Calendar Events` filtered by title and date.
@@ -50,5 +68,5 @@ For `photo`:
 
 ## Notes
 
-- The `identifier` field is included for future-proofing, but title/date filters are the safest cross-platform Shortcuts path today.
+- The `identifier` field is included for future-proofing. On Mac the helper script can use it directly for Photos; on iPhone, title/date/list filters are the safest Shortcuts path today.
 - Messages are intentionally not linked yet.

@@ -6,7 +6,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
 from html import escape as _esc
-from urllib.parse import urlencode
+from urllib.parse import quote
 
 ACCENT = "#ff453a"
 INK = "#121212"
@@ -36,7 +36,6 @@ a{color:#121212;}
 .display-line{font-size:58px;font-weight:300;line-height:0.94;letter-spacing:-0.03em;color:#121212;display:flex;align-items:center;gap:18px;flex-wrap:wrap;}
 .weather-icon{display:inline-flex;align-items:center;justify-content:center;width:84px;height:84px;color:#474a51;flex-shrink:0;}
 .weather-icon svg{width:56px;height:56px;}
-.weather-condition{font-size:17px;font-weight:600;line-height:1.2;color:#121212;margin-top:10px;}
 .weather-summary{font-size:14px;line-height:1.45;color:#474a51;margin-top:8px;}
 .weather-meta{font-size:12px;line-height:1.45;color:#6d7178;margin-top:4px;}
 .supporting{font-size:13px;line-height:1.45;color:#474a51;margin-top:8px;}
@@ -88,7 +87,6 @@ a{color:#121212;}
   .display-line{font-size:42px !important;gap:12px !important;}
   .weather-icon{width:60px !important;height:60px !important;}
   .weather-icon svg{width:40px !important;height:40px !important;}
-  .weather-condition{font-size:16px !important;margin-top:8px !important;}
   .weather-summary{font-size:13px !important;line-height:1.4 !important;}
   .weather-meta{font-size:11px !important;}
   .list-row{display:block !important;padding-bottom:12px !important;margin-bottom:12px !important;}
@@ -124,12 +122,12 @@ def _section(label: str | None, content: str, *, show_rule: bool = True) -> str:
 
 def _shortcut_url(item_type: str, payload: dict) -> str:
     body = {"type": item_type, **payload}
-    query = urlencode({
-        "name": SHORTCUT_NAME,
-        "input": "text",
-        "text": json.dumps(body, separators=(",", ":")),
-    })
-    return f"shortcuts://run-shortcut?{query}"
+    return (
+        "shortcuts://run-shortcut"
+        f"?name={quote(SHORTCUT_NAME, safe='')}"
+        "&input=text"
+        f"&text={quote(json.dumps(body, separators=(',', ':')), safe='')}"
+    )
 
 
 def _linked_text(item_type: str, text: str, payload: dict) -> str:
@@ -205,7 +203,6 @@ def _weather_html(data: dict) -> str:
             f'<div class="display-line">'
             f'{_weather_icon(loc["condition"])}'
             f'<span>{loc["high"]}° / {loc["low"]}°</span></div>'
-            f'<div class="weather-condition">{_esc(loc["condition"])}</div>'
             f'{summary}'
             f'<div class="weather-meta">Sunrise {_esc(loc["sunrise"])} · Sunset {_esc(loc["sunset"])}</div>'
             f'</div>'
@@ -347,6 +344,7 @@ def _photo_html(photo: tuple, *, show_rule: bool = True) -> str:
     open_link = _shortcut_url(
         "photo",
         {
+            "id": meta.get("id"),
             "date": meta.get("date"),
             "year": meta.get("year"),
             "location": meta.get("location"),

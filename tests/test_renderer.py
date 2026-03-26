@@ -4,7 +4,7 @@ from pathlib import Path
 
 from renderer import render_email
 
-WEATHER = {"locations": [{"location": "Warwick, NY", "temp": 54, "condition": "Overcast", "high": 61, "low": 44, "sunrise": "6:52am", "sunset": "7:31pm", "summary": "Gusts up to 28 mph this afternoon. Warmer tomorrow, with a high of 70°."}], "travel_city": None}
+WEATHER = {"locations": [{"location": "Warwick, NY", "temp": 54, "condition": "Overcast", "high": 61, "low": 44, "sunrise": "6:52am", "sunset": "7:31pm", "summary": "Overcast today, with gusts up to 28 mph this afternoon."}], "travel_city": None}
 CALENDAR = [{"time": "9:00am", "title": "Weekly sync", "location": "Zoom", "calendar": "Personal", "identifier": "event-123", "calendar_color": "#0088FF", "all_day": False}]
 REMINDERS = {"overdue": [{"title": "Call accountant", "due": "2026-03-20", "list": "House Wish List", "identifier": "reminder-123", "list_color": "#0088FF"}], "today": [], "upcoming": []}
 MESSAGES = [{"name": "Mom", "handle": "+15555550101", "is_contact": True, "count": 4, "last_time": "8:14pm", "needs_reply": True}]
@@ -36,13 +36,12 @@ def test_render_includes_weather_icon():
     html = html_part.get_payload(decode=True).decode()
     assert 'class="weather-icon"' in html
     assert 'class="weather-card"' in html
-    assert 'class="weather-condition"' in html
     assert 'class="weather-summary"' in html
     assert 'class="weather-meta"' in html
     assert "<svg" in html
     assert "61° / 44°" in html
     assert "Overcast" in html
-    assert "Warmer tomorrow, with a high of 70°." in html
+    assert "Overcast today, with gusts up to 28 mph this afternoon." in html
     assert "Sunrise 6:52am" in html
 
 
@@ -137,7 +136,7 @@ def test_render_reminders_include_list_label_and_color():
     html = html_part.get_payload(decode=True).decode()
     assert "House Wish List" in html
     assert "#0088FF" in html
-    assert "shortcuts://run-shortcut?name=Open+NiederDaily+Item" in html
+    assert "shortcuts://run-shortcut?name=Open%20NiederDaily%20Item" in html
 
 
 def test_render_nyt_without_thumbnail_has_no_placeholder_block():
@@ -168,5 +167,5 @@ def test_render_calendar_titles_use_shortcuts_links():
     )
     html_part = next(p for p in msg.get_payload() if p.get_content_type() == "text/html")
     html = html_part.get_payload(decode=True).decode()
-    assert "shortcuts://run-shortcut?name=Open+NiederDaily+Item" in html
+    assert "shortcuts://run-shortcut?name=Open%20NiederDaily%20Item" in html
     assert "event-123" in html

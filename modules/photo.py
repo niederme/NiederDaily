@@ -311,6 +311,7 @@ def _native_photo_block() -> tuple | None:
         return (
             img_bytes,
             {
+                "id": chosen["id"],
                 "year": year,
                 "date": chosen["date"],
                 "location": chosen["location"],
@@ -385,6 +386,7 @@ def _applescript_photo_block() -> tuple | None:
 
         year = chosen["date"][:4] if chosen["date"] else ""
         meta = {
+            "id": chosen["id"],
             "year": year,
             "date": chosen["date"],
             "location": chosen["location"],

@@ -17,8 +17,10 @@ WMO_CODES = {
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
+NWS_ALERTS_URL = "https://api.weather.gov/alerts/active"
 USER_AGENT = "NiederDaily/1.0 (personal newsletter)"
 DEFAULT_TRAVEL_CALENDARS = {"Little York", "niederCal", "TripIt"}
+SEVERITY_RANK = {"Extreme": 4, "Severe": 3, "Moderate": 2, "Minor": 1, "Unknown": 0}
 
 
 def wmo_label(code: int) -> str:
@@ -84,45 +86,83 @@ def _peak_gust_summary(hourly: dict) -> tuple[int, str] | None:
     return peak[0], _period_label(peak[1])
 
 
-def _summary_line(condition: str, daily: dict, hourly: dict) -> str:
+def _alert_end_phrase(iso: str | None) -> str | None:
+    if not iso:
+        return None
+    try:
+        dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+        return dt.strftime("%-I:%M%p").lower()
+    except Exception:
+        return None
+
+
+def _top_alert(features: list[dict]) -> dict | None:
+    if not features:
+        return None
+
+    def sort_key(feature: dict):
+        props = feature.get("properties", {})
+        severity = props.get("severity", "Unknown")
+        ends = props.get("ends") or props.get("expires") or ""
+        return (-SEVERITY_RANK.get(severity, 0), ends)
+
+    return sorted(features, key=sort_key)[0]
+
+
+def _fetch_alert_summary(lat: float, lon: float) -> str | None:
+    try:
+        resp = requests.get(
+            NWS_ALERTS_URL,
+            params={"point": f"{lat},{lon}"},
+            headers={"User-Agent": USER_AGENT, "Accept": "application/geo+json"},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        features = resp.json().get("features", [])
+        alert = _top_alert(features)
+        if not alert:
+            return None
+        props = alert.get("properties", {})
+        event = props.get("event")
+        if not event:
+            headline = props.get("headline")
+            if headline:
+                return headline.rstrip(".") + "."
+            return None
+        end_phrase = _alert_end_phrase(props.get("ends") or props.get("expires"))
+        if end_phrase:
+            return f"{event} in effect until {end_phrase}."
+        return f"{event} in effect."
+    except Exception:
+        return None
+
+
+def _summary_line(condition: str, daily: dict, hourly: dict, alert_summary: str | None = None) -> str:
     today_phrase = _lower_condition(condition)
-    today_highs = daily.get("temperature_2m_max", [])
-    tomorrow_high = round(today_highs[1]) if len(today_highs) > 1 and today_highs[1] is not None else None
-    today_high = round(today_highs[0]) if today_highs and today_highs[0] is not None else None
+    condition_lower = condition.lower()
 
     gust_phrase = None
     peak_gust = _peak_gust_summary(hourly)
     if peak_gust and peak_gust[0] >= 25:
         gust_phrase = f"with gusts up to {peak_gust[0]} mph {peak_gust[1]}"
 
-    tomorrow_phrase = None
-    if tomorrow_high is not None and today_high is not None:
-        delta = tomorrow_high - today_high
-        if delta >= 5:
-            tomorrow_phrase = f"Warmer tomorrow, with a high of {tomorrow_high}°."
-        elif delta <= -5:
-            tomorrow_phrase = f"Cooler tomorrow, with a high of {tomorrow_high}°."
-
     precip_probs = daily.get("precipitation_probability_max", [])
     precip_max = round(precip_probs[0]) if precip_probs and precip_probs[0] is not None else None
     precip_phrase = None
-    if precip_max is not None and precip_max >= 40 and not any(word in condition.lower() for word in ["rain", "drizzle", "shower", "storm", "snow"]):
+    if precip_max is not None and precip_max >= 40 and not any(word in condition_lower for word in ["rain", "drizzle", "shower", "storm", "snow"]):
         precip_phrase = f"Rain chances up to {precip_max}% today."
 
-    extras = []
-    if gust_phrase and tomorrow_phrase:
-        extras.extend([f"Gusts up to {peak_gust[0]} mph {peak_gust[1]}.", tomorrow_phrase])
+    today_sentence = None
+    if gust_phrase:
+        today_sentence = f"{today_phrase}, {gust_phrase}."
+    elif precip_phrase:
+        today_sentence = f"{today_phrase}. {precip_phrase}"
     else:
-        if gust_phrase:
-            extras.append(f"Gusts up to {peak_gust[0]} mph {peak_gust[1]}.")
-        if precip_phrase:
-            extras.append(precip_phrase)
-        if tomorrow_phrase:
-            extras.append(tomorrow_phrase)
+        today_sentence = f"{today_phrase}."
 
-    if extras:
-        return " ".join(extras)
-    return f"{today_phrase}."
+    if alert_summary:
+        return f"{alert_summary} {today_sentence}"
+    return today_sentence
 
 
 def fetch_weather(lat: float, lon: float, name: str) -> dict | None:
@@ -141,6 +181,7 @@ def fetch_weather(lat: float, lon: float, name: str) -> dict | None:
         current = data["current"]
         daily = data["daily"]
         hourly = data.get("hourly", {})
+        alert_summary = _fetch_alert_summary(lat, lon)
         return {
             "location": name,
             "temp": round(current["temperature_2m"]),
@@ -149,7 +190,7 @@ def fetch_weather(lat: float, lon: float, name: str) -> dict | None:
             "low": round(daily["temperature_2m_min"][0]),
             "sunrise": _fmt_time(daily["sunrise"][0]),
             "sunset": _fmt_time(daily["sunset"][0]),
-            "summary": _summary_line(wmo_label(current["weathercode"]), daily, hourly),
+            "summary": _summary_line(wmo_label(current["weathercode"]), daily, hourly, alert_summary=alert_summary),
         }
     except Exception:
         return None
