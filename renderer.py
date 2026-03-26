@@ -47,7 +47,7 @@ a{color:#121212;}
 .msgmeta{font-size:12px;color:#474a51;line-height:1.45;margin-top:5px;}
 .nyt{display:flex;gap:20px;align-items:flex-start;padding:0 0 16px;margin:0 0 16px;border-bottom:1px solid rgba(214,208,198,0.55);}
 .nyt:last-child{padding-bottom:0;margin-bottom:0;border-bottom:0;}
-.nytthumb{width:96px;height:96px;object-fit:cover;object-position:right center;flex-shrink:0;background:#f5efe5;}
+.nytthumb{width:175px;height:117px;object-fit:cover;object-position:right center;flex-shrink:0;background:#f5efe5;}
 .nythed{font-size:17px;font-weight:700;line-height:1.18;color:#121212;margin-bottom:6px;}
 .nytdek{font-size:13px;color:#474a51;line-height:1.42;}
 .nytbyline{font-size:11px;color:#474a51;line-height:1.4;margin-top:7px;}
@@ -61,8 +61,10 @@ def _label(text: str) -> str:
     return f'<div style="{SECTION_LABEL_STYLE}">{_esc(text)}</div>'
 
 
-def _section(label: str, content: str) -> str:
-    return f'<div class="section"><div class="section-rule"></div>{_label(label)}{content}</div>'
+def _section(label: str | None, content: str, *, show_rule: bool = True) -> str:
+    rule = '<div class="section-rule"></div>' if show_rule else ""
+    heading = _label(label) if label else ""
+    return f'<div class="section">{rule}{heading}{content}</div>'
 
 
 def _weather_icon(condition: str) -> str:
@@ -119,7 +121,6 @@ def _weather_icon(condition: str) -> str:
 def _weather_html(data: dict) -> str:
     parts = []
     for loc in data["locations"]:
-        label = "Weather"
         body = (
             f'<div class="weather-card">'
             f'<div class="module-place">{_esc(loc["location"])}</div>'
@@ -130,13 +131,13 @@ def _weather_html(data: dict) -> str:
             f'<div class="weather-meta">Sunrise {_esc(loc["sunrise"])} · Sunset {_esc(loc["sunset"])}</div>'
             f'</div>'
         )
-        parts.append(_section(label, body))
+        parts.append(_section(None, body, show_rule=False))
     return "".join(parts)
 
 
-def _calendar_html(events: list) -> str:
+def _calendar_html(events: list, *, show_rule: bool = True) -> str:
     if not events:
-        return _section("Calendar", '<div class="supporting">Nothing on the calendar.</div>')
+        return _section("Calendar", '<div class="supporting">Nothing on the calendar.</div>', show_rule=show_rule)
     rows = []
     for e in events:
         time_str = _esc(e.get("time") or "All day")
@@ -146,10 +147,10 @@ def _calendar_html(events: list) -> str:
             f'<span class="list-time">{time_str}</span>'
             f'<div class="list-main">{_esc(e["title"])}{loc}</div></div>'
         )
-    return _section("Calendar", "".join(rows))
+    return _section("Calendar", "".join(rows), show_rule=show_rule)
 
 
-def _reminders_html(data: dict) -> str:
+def _reminders_html(data: dict, *, show_rule: bool = True) -> str:
     rows = []
     for r in data.get("overdue", []):
         rows.append(f'<div class="list-row"><span class="list-time">{BADGE_OVERDUE}</span><div class="list-main">{_esc(r["title"])}</div></div>')
@@ -170,11 +171,11 @@ def _reminders_html(data: dict) -> str:
         badge = f'<span style="display:inline-block;min-width:56px;color:{MUTED};font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">{due}</span>'
         rows.append(f'<div class="list-row"><span class="list-time">{badge}</span><div class="list-main">{_esc(r["title"])}</div></div>')
     if not rows:
-        return _section("Reminders", '<div class="supporting">All clear.</div>')
-    return _section("Reminders", "".join(rows))
+        return _section("Reminders", '<div class="supporting">All clear.</div>', show_rule=show_rule)
+    return _section("Reminders", "".join(rows), show_rule=show_rule)
 
 
-def _messages_html(threads: list) -> str:
+def _messages_html(threads: list, *, show_rule: bool = True) -> str:
     rows = []
     for t in threads:
         badge = BADGE_REPLY if t["needs_reply"] else ""
@@ -184,10 +185,10 @@ def _messages_html(threads: list) -> str:
             f'<div class="msgmeta">{t["count"]} message{"s" if t["count"] != 1 else ""} · last {_esc(t["last_time"])}</div></div>'
             f'{badge}</div>'
         )
-    return _section("Messages", "".join(rows))
+    return _section("Messages", "".join(rows), show_rule=show_rule)
 
 
-def _nyt_html(stories: list) -> str:
+def _nyt_html(stories: list, *, show_rule: bool = True) -> str:
     rows = []
     for s in stories:
         img = ""
@@ -201,7 +202,7 @@ def _nyt_html(stories: list) -> str:
             f'<a href="{_esc(s["url"])}" style="color:{INK};text-decoration:none;">{_esc(s["title"])}</a></div>'
             f'<div class="nytdek">{_esc(s["abstract"])}</div>{byline}</div>{img}</div>'
         )
-    return _section("In the News", "".join(rows))
+    return _section("In the News", "".join(rows), show_rule=show_rule)
 
 
 def render_email(
@@ -223,14 +224,18 @@ def render_email(
         welcome_html = f'<div class="welcome">{_esc(welcome)}</div>'
 
     sections = []
+    next_section_rule = weather is None
     if weather:
         sections.append(_weather_html(weather))
     if calendar is not None:
-        sections.append(_calendar_html(calendar))
+        sections.append(_calendar_html(calendar, show_rule=next_section_rule))
+        next_section_rule = True
     if reminders:
-        sections.append(_reminders_html(reminders))
+        sections.append(_reminders_html(reminders, show_rule=next_section_rule))
+        next_section_rule = True
     if messages:
-        sections.append(_messages_html(messages))
+        sections.append(_messages_html(messages, show_rule=next_section_rule))
+        next_section_rule = True
 
     photo_html = ""
     if photo:
@@ -251,7 +256,7 @@ def render_email(
         )
 
     if nyt:
-        sections.append(_nyt_html(nyt))
+        sections.append(_nyt_html(nyt, show_rule=next_section_rule))
 
     html = f"""<!DOCTYPE html>
 <html lang="en">

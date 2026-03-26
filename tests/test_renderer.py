@@ -43,6 +43,17 @@ def test_render_includes_weather_icon():
     assert "Overcast" in html
     assert "Sunrise 6:52am" in html
 
+
+def test_render_omits_rule_between_weather_card_and_next_section():
+    msg = render_email(
+        recipient="me@example.com", welcome=None,
+        weather=WEATHER, calendar=CALENDAR, reminders=None, messages=None, photo=None, nyt=None
+    )
+    html_part = next(p for p in msg.get_payload() if p.get_content_type() == "text/html")
+    html = html_part.get_payload(decode=True).decode()
+    assert html.count('class="section-rule"') == 0
+    assert "Calendar" in html
+
 def test_render_includes_photo_attachment():
     msg = render_email(
         recipient="me@example.com", welcome=None,
