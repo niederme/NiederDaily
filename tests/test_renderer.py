@@ -85,6 +85,7 @@ def test_render_skips_none_sections_without_error():
     html = html_part.get_payload(decode=True).decode()
     assert "NiederDaily" in html
     assert f'color:{__import__("renderer").ACCENT};' in html
+    assert "@media only screen and (max-width: 640px)" in html
 
 def test_render_welcome_appears_in_header():
     msg = render_email(
