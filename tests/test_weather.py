@@ -42,7 +42,7 @@ def test_fetch_weather_returns_structured_data(requests_mock):
     assert result["low"] == 44
     assert result["sunrise"] == "6:52am"
     assert result["sunset"] == "7:31pm"
-    assert result["summary"] == "Overcast today, with gusts up to 28 mph this afternoon. Warmer tomorrow, with a high of 70°."
+    assert result["summary"] == "Gusts up to 28 mph this afternoon. Warmer tomorrow, with a high of 70°."
 
 def test_fetch_weather_returns_none_on_error(requests_mock):
     requests_mock.get("https://api.open-meteo.com/v1/forecast", status_code=500)

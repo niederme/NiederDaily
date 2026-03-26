@@ -4,7 +4,7 @@ from pathlib import Path
 
 from renderer import render_email
 
-WEATHER = {"locations": [{"location": "Warwick, NY", "temp": 54, "condition": "Overcast", "high": 61, "low": 44, "sunrise": "6:52am", "sunset": "7:31pm", "summary": "Overcast today, with gusts up to 28 mph this afternoon. Warmer tomorrow, with a high of 70°."}], "travel_city": None}
+WEATHER = {"locations": [{"location": "Warwick, NY", "temp": 54, "condition": "Overcast", "high": 61, "low": 44, "sunrise": "6:52am", "sunset": "7:31pm", "summary": "Gusts up to 28 mph this afternoon. Warmer tomorrow, with a high of 70°."}], "travel_city": None}
 CALENDAR = [{"time": "9:00am", "title": "Weekly sync", "location": "Zoom", "calendar": "Personal", "calendar_color": "#0088FF", "all_day": False}]
 REMINDERS = {"overdue": [{"title": "Call accountant", "due": "2026-03-20", "list": "House Wish List", "list_color": "#0088FF"}], "today": [], "upcoming": []}
 MESSAGES = [{"name": "Mom", "handle": "+15555550101", "is_contact": True, "count": 4, "last_time": "8:14pm", "needs_reply": True}]

@@ -60,10 +60,10 @@ a{color:#121212;}
 .footer a{color:#121212;text-decoration:none;border-bottom:1px solid rgba(18,18,18,0.65);}
 @media only screen and (max-width: 640px){
   .wrap{max-width:100% !important;}
-  .header{padding:28px 20px 18px !important;}
-  .section{padding:0 20px 20px !important;}
-  .photo-caption{padding:12px 20px !important;}
-  .footer{padding:16px 20px 28px !important;}
+  .header{padding:28px 14px 18px !important;}
+  .section{padding:0 14px 20px !important;}
+  .photo-caption{padding:12px 14px !important;}
+  .footer{padding:16px 14px 28px !important;}
   .date-line{font-size:14px !important;margin-bottom:8px !important;}
   .logo{font-size:36px !important;margin-bottom:12px !important;}
   .welcome{font-size:16px !important;line-height:1.45 !important;}
@@ -84,8 +84,8 @@ a{color:#121212;}
   .msgrow{display:block !important;padding-bottom:12px !important;margin-bottom:12px !important;}
   .msgname{font-size:15px !important;}
   .msgmeta{font-size:11px !important;}
-  .nyt{display:block !important;padding-bottom:18px !important;margin-bottom:18px !important;}
-  .nytthumb{display:block !important;width:100% !important;max-width:210px !important;height:140px !important;margin:0 0 12px auto !important;}
+  .nyt{display:flex !important;gap:12px !important;align-items:flex-start !important;padding-bottom:18px !important;margin-bottom:18px !important;}
+  .nytthumb{display:block !important;width:120px !important;height:80px !important;max-width:none !important;flex-shrink:0 !important;margin:0 !important;}
   .nythed{font-size:16px !important;margin-bottom:5px !important;}
   .nytdek{font-size:12px !important;line-height:1.45 !important;}
   .nytbyline{font-size:11px !important;margin-top:6px !important;}

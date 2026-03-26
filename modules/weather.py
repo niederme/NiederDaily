@@ -86,7 +86,6 @@ def _peak_gust_summary(hourly: dict) -> tuple[int, str] | None:
 
 def _summary_line(condition: str, daily: dict, hourly: dict) -> str:
     today_phrase = _lower_condition(condition)
-
     today_highs = daily.get("temperature_2m_max", [])
     tomorrow_high = round(today_highs[1]) if len(today_highs) > 1 and today_highs[1] is not None else None
     today_high = round(today_highs[0]) if today_highs and today_highs[0] is not None else None
@@ -110,16 +109,19 @@ def _summary_line(condition: str, daily: dict, hourly: dict) -> str:
     if precip_max is not None and precip_max >= 40 and not any(word in condition.lower() for word in ["rain", "drizzle", "shower", "storm", "snow"]):
         precip_phrase = f"Rain chances up to {precip_max}% today."
 
+    extras = []
     if gust_phrase and tomorrow_phrase:
-        return f"{today_phrase}, {gust_phrase}. {tomorrow_phrase}"
-    if gust_phrase:
-        return f"{today_phrase}, {gust_phrase}."
-    if precip_phrase and tomorrow_phrase:
-        return f"{today_phrase}. {precip_phrase} {tomorrow_phrase}"
-    if tomorrow_phrase:
-        return f"{today_phrase}. {tomorrow_phrase}"
-    if precip_phrase:
-        return f"{today_phrase}. {precip_phrase}"
+        extras.extend([f"Gusts up to {peak_gust[0]} mph {peak_gust[1]}.", tomorrow_phrase])
+    else:
+        if gust_phrase:
+            extras.append(f"Gusts up to {peak_gust[0]} mph {peak_gust[1]}.")
+        if precip_phrase:
+            extras.append(precip_phrase)
+        if tomorrow_phrase:
+            extras.append(tomorrow_phrase)
+
+    if extras:
+        return " ".join(extras)
     return f"{today_phrase}."
 
 
