@@ -4,11 +4,21 @@ from modules.weather import fetch_weather, geocode_location, wmo_label, weather_
 
 OPEN_METEO_RESPONSE = {
     "current": {"temperature_2m": 54.1, "weathercode": 3},
+    "hourly": {
+        "time": [
+            "2026-03-25T00:00",
+            "2026-03-25T12:00",
+            "2026-03-25T15:00",
+        ],
+        "wind_gusts_10m": [12.0, 22.0, 28.0],
+    },
     "daily": {
-        "temperature_2m_max": [61.0],
-        "temperature_2m_min": [44.0],
+        "temperature_2m_max": [61.0, 70.0],
+        "temperature_2m_min": [44.0, 49.0],
         "sunrise": ["2026-03-25T06:52"],
         "sunset": ["2026-03-25T19:31"],
+        "precipitation_probability_max": [10.0, 20.0],
+        "weathercode": [3, 1],
     }
 }
 
@@ -32,6 +42,7 @@ def test_fetch_weather_returns_structured_data(requests_mock):
     assert result["low"] == 44
     assert result["sunrise"] == "6:52am"
     assert result["sunset"] == "7:31pm"
+    assert result["summary"] == "Overcast today, with gusts up to 28 mph this afternoon. Warmer tomorrow, with a high of 70°."
 
 def test_fetch_weather_returns_none_on_error(requests_mock):
     requests_mock.get("https://api.open-meteo.com/v1/forecast", status_code=500)

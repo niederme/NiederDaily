@@ -4,7 +4,7 @@ from pathlib import Path
 
 from renderer import render_email
 
-WEATHER = {"locations": [{"location": "Warwick, NY", "temp": 54, "condition": "Overcast", "high": 61, "low": 44, "sunrise": "6:52am", "sunset": "7:31pm"}], "travel_city": None}
+WEATHER = {"locations": [{"location": "Warwick, NY", "temp": 54, "condition": "Overcast", "high": 61, "low": 44, "sunrise": "6:52am", "sunset": "7:31pm", "summary": "Overcast today, with gusts up to 28 mph this afternoon. Warmer tomorrow, with a high of 70°."}], "travel_city": None}
 CALENDAR = [{"time": "9:00am", "title": "Weekly sync", "location": "", "all_day": False}]
 REMINDERS = {"overdue": [{"title": "Call accountant", "due": "2026-03-20"}], "today": [], "upcoming": []}
 MESSAGES = [{"name": "Mom", "handle": "+15555550101", "is_contact": True, "count": 4, "last_time": "8:14pm", "needs_reply": True}]
@@ -37,10 +37,12 @@ def test_render_includes_weather_icon():
     assert 'class="weather-icon"' in html
     assert 'class="weather-card"' in html
     assert 'class="weather-condition"' in html
+    assert 'class="weather-summary"' in html
     assert 'class="weather-meta"' in html
     assert "<svg" in html
     assert "61° / 44°" in html
     assert "Overcast" in html
+    assert "Warmer tomorrow, with a high of 70°." in html
     assert "Sunrise 6:52am" in html
 
 

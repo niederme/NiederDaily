@@ -34,6 +34,7 @@ a{color:#121212;}
 .weather-icon{display:inline-flex;align-items:center;justify-content:center;width:84px;height:84px;color:#474a51;flex-shrink:0;}
 .weather-icon svg{width:56px;height:56px;}
 .weather-condition{font-size:17px;font-weight:600;line-height:1.2;color:#121212;margin-top:10px;}
+.weather-summary{font-size:14px;line-height:1.45;color:#474a51;margin-top:8px;}
 .weather-meta{font-size:12px;line-height:1.45;color:#6d7178;margin-top:4px;}
 .supporting{font-size:13px;line-height:1.45;color:#474a51;margin-top:8px;}
 .list-row{display:flex;gap:18px;align-items:baseline;padding:0 0 11px;margin:0 0 11px;border-bottom:1px solid rgba(214,208,198,0.55);}
@@ -121,6 +122,9 @@ def _weather_icon(condition: str) -> str:
 def _weather_html(data: dict) -> str:
     parts = []
     for loc in data["locations"]:
+        summary = ""
+        if loc.get("summary"):
+            summary = f'<div class="weather-summary">{_esc(loc["summary"])}</div>'
         body = (
             f'<div class="weather-card">'
             f'<div class="module-place">{_esc(loc["location"])}</div>'
@@ -128,6 +132,7 @@ def _weather_html(data: dict) -> str:
             f'{_weather_icon(loc["condition"])}'
             f'<span>{loc["high"]}° / {loc["low"]}°</span></div>'
             f'<div class="weather-condition">{_esc(loc["condition"])}</div>'
+            f'{summary}'
             f'<div class="weather-meta">Sunrise {_esc(loc["sunrise"])} · Sunset {_esc(loc["sunset"])}</div>'
             f'</div>'
         )

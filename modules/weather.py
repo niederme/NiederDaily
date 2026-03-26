@@ -34,20 +34,111 @@ def _fmt_time(iso: str) -> str:
         return iso
 
 
+def _lower_condition(condition: str) -> str:
+    c = condition.lower()
+    if "thunder" in c:
+        return "Stormy today"
+    if "snow" in c or "ice" in c:
+        return "Snowy today"
+    if "rain" in c or "drizzle" in c or "shower" in c:
+        return "Rainy today"
+    if "fog" in c:
+        return "Foggy today"
+    if "overcast" in c:
+        return "Overcast today"
+    if "partly cloudy" in c:
+        return "Partly cloudy today"
+    if "mainly clear" in c:
+        return "Mostly clear today"
+    if "clear" in c or "sun" in c:
+        return "Clear today"
+    return f"{condition} today"
+
+
+def _period_label(hour: int) -> str:
+    if 5 <= hour < 12:
+        return "this morning"
+    if 12 <= hour < 17:
+        return "this afternoon"
+    if 17 <= hour < 22:
+        return "this evening"
+    return "overnight"
+
+
+def _peak_gust_summary(hourly: dict) -> tuple[int, str] | None:
+    times = hourly.get("time", [])
+    gusts = hourly.get("wind_gusts_10m", [])
+    peak = None
+    for iso, gust in zip(times, gusts):
+        if gust is None:
+            continue
+        try:
+            dt = datetime.fromisoformat(iso)
+        except Exception:
+            continue
+        candidate = (round(gust), dt.hour)
+        if peak is None or candidate[0] > peak[0]:
+            peak = candidate
+    if peak is None:
+        return None
+    return peak[0], _period_label(peak[1])
+
+
+def _summary_line(condition: str, daily: dict, hourly: dict) -> str:
+    today_phrase = _lower_condition(condition)
+
+    today_highs = daily.get("temperature_2m_max", [])
+    tomorrow_high = round(today_highs[1]) if len(today_highs) > 1 and today_highs[1] is not None else None
+    today_high = round(today_highs[0]) if today_highs and today_highs[0] is not None else None
+
+    gust_phrase = None
+    peak_gust = _peak_gust_summary(hourly)
+    if peak_gust and peak_gust[0] >= 25:
+        gust_phrase = f"with gusts up to {peak_gust[0]} mph {peak_gust[1]}"
+
+    tomorrow_phrase = None
+    if tomorrow_high is not None and today_high is not None:
+        delta = tomorrow_high - today_high
+        if delta >= 5:
+            tomorrow_phrase = f"Warmer tomorrow, with a high of {tomorrow_high}°."
+        elif delta <= -5:
+            tomorrow_phrase = f"Cooler tomorrow, with a high of {tomorrow_high}°."
+
+    precip_probs = daily.get("precipitation_probability_max", [])
+    precip_max = round(precip_probs[0]) if precip_probs and precip_probs[0] is not None else None
+    precip_phrase = None
+    if precip_max is not None and precip_max >= 40 and not any(word in condition.lower() for word in ["rain", "drizzle", "shower", "storm", "snow"]):
+        precip_phrase = f"Rain chances up to {precip_max}% today."
+
+    if gust_phrase and tomorrow_phrase:
+        return f"{today_phrase}, {gust_phrase}. {tomorrow_phrase}"
+    if gust_phrase:
+        return f"{today_phrase}, {gust_phrase}."
+    if precip_phrase and tomorrow_phrase:
+        return f"{today_phrase}. {precip_phrase} {tomorrow_phrase}"
+    if tomorrow_phrase:
+        return f"{today_phrase}. {tomorrow_phrase}"
+    if precip_phrase:
+        return f"{today_phrase}. {precip_phrase}"
+    return f"{today_phrase}."
+
+
 def fetch_weather(lat: float, lon: float, name: str) -> dict | None:
     try:
         resp = requests.get(OPEN_METEO_URL, params={
             "latitude": lat, "longitude": lon,
             "current": "temperature_2m,weathercode",
-            "daily": "temperature_2m_max,temperature_2m_min,sunrise,sunset",
+            "hourly": "wind_gusts_10m",
+            "daily": "temperature_2m_max,temperature_2m_min,sunrise,sunset,precipitation_probability_max,weathercode",
             "temperature_unit": "fahrenheit",
             "timezone": "auto",
-            "forecast_days": 1,
+            "forecast_days": 2,
         }, timeout=10)
         resp.raise_for_status()
         data = resp.json()
         current = data["current"]
         daily = data["daily"]
+        hourly = data.get("hourly", {})
         return {
             "location": name,
             "temp": round(current["temperature_2m"]),
@@ -56,6 +147,7 @@ def fetch_weather(lat: float, lon: float, name: str) -> dict | None:
             "low": round(daily["temperature_2m_min"][0]),
             "sunrise": _fmt_time(daily["sunrise"][0]),
             "sunset": _fmt_time(daily["sunset"][0]),
+            "summary": _summary_line(wmo_label(current["weathercode"]), daily, hourly),
         }
     except Exception:
         return None
