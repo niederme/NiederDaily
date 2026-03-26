@@ -1,22 +1,33 @@
 # NiederDaily
 
-NiederDaily is a personal daily email digest for one person and one machine.
-It assembles a morning email from:
+NiederDaily is a macOS-native personal morning email digest for one person and one machine.
+Each run pulls from local apps and a few network services to assemble a single editorial-style email that is useful at a glance and lightweight to maintain.
+
+It currently combines:
 
 - local calendar events
 - local reminders
 - local Photos "On This Day" memories
-- local Messages context
-- weather
+- local Messages context from `chat.db`
+- home weather, plus travel weather when a trip calendar location points elsewhere
 - a short Claude-written welcome line
 - New York Times Most Popular stories
 
 The current branch also includes a substantial visual refresh so the email feels closer to the `nieder.me/2026` editorial style on desktop and mobile.
 
+## Highlights
+
+- machine-local by default: most inputs come straight from macOS apps and permissions
+- graceful degradation: if a module fails, the digest still sends and omits that section
+- scheduled-run friendly: includes a wrapper app plus `launchd` template for more reliable TCC permissions
+- context-rich output: weather summary, reminder urgency, reply-needed signal, and photo metadata surface in a skim-friendly layout
+- click-through actions: calendar items and reminders can jump back into local workflows through Shortcuts deep links
+
 ## What It Does
 
 Each run builds an email with some or all of these modules:
 
+- `Welcome`
 - `Weather`
 - `Calendar`
 - `Reminders`
@@ -33,7 +44,7 @@ If a module fails, the send can still continue. The app logs the failure and omi
 - Gmail API credentials for sending
 - Anthropic API key for the welcome line
 - New York Times API key
-- local access to Calendar, Reminders, Photos, Contacts, and Messages as needed
+- local access to Calendar, Reminders, Photos, Contacts, Messages, and Shortcuts as needed
 
 Python dependencies live in [`requirements.txt`](/Users/niederme/~Repos/NiederDaily/requirements.txt):
 
@@ -72,11 +83,12 @@ Create `~/.niederdaily/config.json`:
   "nyt_api_key": "YOUR_NYT_KEY",
   "anthropic_api_key": "YOUR_ANTHROPIC_KEY",
   "reminders_lists": [],
-  "calendars": []
+  "calendars": [],
+  "weather_calendars": ["Little York", "niederCal", "TripIt"]
 }
 ```
 
-Required keys are defined in [`config.py`](/Users/niederme/~Repos/NiederDaily/config.py).
+Required keys are defined in [`config.py`](/Users/niederme/~Repos/NiederDaily/config.py). Calendar and weather calendar lists are optional filters.
 
 ### 3. Add Gmail OAuth credentials
 
@@ -111,6 +123,27 @@ Preflight checks:
 - Claude
 - NYT API
 
+### 5. Build the wrapper app for scheduled runs
+
+Scheduled runs work best through a real app identity instead of raw `launchd` directly invoking Python:
+
+```bash
+./setup/build_niederdaily_app.sh
+```
+
+This creates:
+
+```bash
+~/Applications/NiederDaily.app
+```
+
+Grant that app access in macOS Privacy & Security for:
+
+- Calendars
+- Reminders
+- Photos
+- Full Disk Access if you want Messages access in the scheduled runtime
+
 ## Running
 
 ### Manual send
@@ -127,7 +160,12 @@ tail -n 50 ~/.niederdaily/logs/niederdaily.log
 
 ## Scheduling
 
-The repo includes a launch agent template at [`setup/me.nieder.daily.plist.template`](/Users/niederme/~Repos/NiederDaily/setup/me.nieder.daily.plist.template).
+The repo includes:
+
+- a launch agent template at [`setup/me.nieder.daily.plist.template`](/Users/niederme/~Repos/NiederDaily/setup/me.nieder.daily.plist.template)
+- an app builder at [`setup/build_niederdaily_app.sh`](/Users/niederme/~Repos/NiederDaily/setup/build_niederdaily_app.sh)
+
+The launch agent is intended to open `~/Applications/NiederDaily.app`, not to run raw Python directly.
 
 On newer macOS versions, prefer `bootstrap`/`bootout` over `launchctl load`:
 
