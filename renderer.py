@@ -10,13 +10,12 @@ ACCENT = "#ff453a"
 INK = "#121212"
 MUTED = "#474a51"
 LINE = "#d6d0c6"
-SURFACE = "#f5efe5"
 
 BADGE_OVERDUE = f'<span style="display:inline-block;min-width:56px;color:{ACCENT};font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Overdue</span>'
 BADGE_TODAY = f'<span style="display:inline-block;min-width:56px;color:{ACCENT};font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Today</span>'
 BADGE_REPLY = f'<span style="display:inline-block;color:{ACCENT};font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Needs reply</span>'
 
-SECTION_LABEL_STYLE = f"font-size:10px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:{MUTED};margin-bottom:14px;"
+SECTION_LABEL_STYLE = f"font-size:16px;font-weight:700;letter-spacing:-0.01em;color:{INK};margin-bottom:14px;"
 
 BASE_STYLES = """
 body{margin:0;padding:0;background:#ffffff;color:#121212;font-family:Sohne,"SF Pro Text","SF Pro Display",-apple-system,BlinkMacSystemFont,"Helvetica Neue","Arial Nova",Arial,sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
@@ -24,13 +23,13 @@ a{color:#121212;}
 .wrap{max-width:680px;margin:0 auto;}
 .email{background:#ffffff;overflow:hidden;}
 .header{padding:44px 40px 24px;border-bottom:1px solid #d6d0c6;}
-.logo{font-size:30px;font-weight:700;line-height:0.96;letter-spacing:0.12em;text-transform:uppercase;color:#121212;margin-bottom:14px;}
-.date-line{font-size:16px;font-weight:300;line-height:1.35;letter-spacing:-0.01em;color:#474a51;max-width:520px;margin-bottom:18px;}
-.welcome{max-width:520px;font-size:18px;font-weight:300;font-style:italic;line-height:1.38;color:#474a51;padding-top:18px;border-top:1px solid #d6d0c6;}
+.date-line{font-size:16px;font-weight:300;line-height:1.35;letter-spacing:-0.01em;color:#474a51;max-width:520px;margin-bottom:12px;}
+.logo{font-size:44px;font-weight:700;line-height:0.96;letter-spacing:-0.03em;color:#121212;margin-bottom:18px;}
+.welcome{max-width:520px;font-size:18px;font-weight:300;line-height:1.38;color:#474a51;}
 .section{padding:24px 40px;border-bottom:1px solid #d6d0c6;}
-.kicker{font-size:10px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:#474a51;margin-bottom:14px;}
-.display-line{font-size:46px;font-weight:300;line-height:0.94;letter-spacing:-0.03em;color:#121212;display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
-.weather-icon{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;color:#474a51;flex-shrink:0;}
+.module-place{font-size:20px;font-weight:700;line-height:1.15;letter-spacing:-0.02em;color:#121212;margin-bottom:12px;}
+.display-line{font-size:54px;font-weight:300;line-height:0.94;letter-spacing:-0.03em;color:#121212;display:flex;align-items:center;gap:18px;flex-wrap:wrap;}
+.weather-icon{display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;color:#474a51;flex-shrink:0;}
 .supporting{font-size:13px;line-height:1.45;color:#474a51;margin-top:8px;}
 .list-row{display:flex;gap:18px;align-items:baseline;padding:0 0 11px;margin:0 0 11px;border-bottom:1px solid rgba(214,208,198,0.55);}
 .list-row:last-child{padding-bottom:0;margin-bottom:0;border-bottom:0;}
@@ -114,13 +113,14 @@ def _weather_icon(condition: str) -> str:
 def _weather_html(data: dict) -> str:
     parts = []
     for loc in data["locations"]:
-        label = f"WEATHER · {loc['location'].upper()}"
+        label = "Weather"
         body = (
+            f'<div class="module-place">{_esc(loc["location"])}</div>'
             f'<div class="display-line">'
             f'{_weather_icon(loc["condition"])}'
-            f'<span>{loc["temp"]}°&thinsp; {_esc(loc["condition"])}</span></div>'
+            f'<span>{loc["low"]}° / {loc["high"]}°</span></div>'
             f'<div class="supporting">'
-            f'High {loc["high"]}° · Low {loc["low"]}° · Sunrise {_esc(loc["sunrise"])} · Sunset {_esc(loc["sunset"])}</div>'
+            f'{_esc(loc["condition"])} · Sunrise {_esc(loc["sunrise"])} · Sunset {_esc(loc["sunset"])}</div>'
         )
         parts.append(_section(label, body))
     return "".join(parts)
@@ -182,10 +182,9 @@ def _messages_html(threads: list) -> str:
 def _nyt_html(stories: list) -> str:
     rows = []
     for s in stories:
+        img = ""
         if s.get("thumbnail"):
             img = f'<img class="nytthumb" src="{_esc(s["thumbnail"])}" alt="">'
-        else:
-            img = f'<div class="nytthumb" style="background:{SURFACE};"></div>'
         rows.append(
             f'<div class="nyt"><div style="flex:1;"><div class="nythed">'
             f'<a href="{_esc(s["url"])}" style="color:{INK};text-decoration:none;">{_esc(s["title"])}</a></div>'
@@ -251,8 +250,8 @@ def render_email(
 <div class="wrap" style="padding:24px 20px 48px;">
 <div class="email">
   <div class="header">
-    <div class="logo">NiederDaily</div>
     <div class="date-line">{date_str}</div>
+    <div class="logo">NiederDaily</div>
     {welcome_html}
   </div>
   {"".join(sections)}

@@ -36,6 +36,7 @@ def test_render_includes_weather_icon():
     html = html_part.get_payload(decode=True).decode()
     assert 'class="weather-icon"' in html
     assert "<svg" in html
+    assert "44° / 61°" in html
 
 def test_render_includes_photo_attachment():
     msg = render_email(
@@ -72,6 +73,7 @@ def test_render_welcome_appears_in_header():
     html_part = next(p for p in msg.get_payload() if p.get_content_type() == "text/html")
     html = html_part.get_payload(decode=True).decode()
     assert "Today is fine." in html
+    assert "font-style:italic" not in html
 
 def test_render_reminders_only_show_first_upcoming_day():
     reminders = {
@@ -92,3 +94,13 @@ def test_render_reminders_only_show_first_upcoming_day():
     assert "Call mom" in html
     assert "Pick up Rx" in html
     assert "UMAC uniforms" not in html
+
+
+def test_render_nyt_without_thumbnail_has_no_placeholder_block():
+    msg = render_email(
+        recipient="me@example.com", welcome=None,
+        weather=None, calendar=None, reminders=None, messages=None, photo=None, nyt=NYT
+    )
+    html_part = next(p for p in msg.get_payload() if p.get_content_type() == "text/html")
+    html = html_part.get_payload(decode=True).decode()
+    assert 'class="nytthumb"' not in html
