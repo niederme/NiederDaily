@@ -51,10 +51,8 @@ a{color:#121212;}
 .meta-sep{color:#9aa0a6;margin:0 6px;}
 .calendar-source{display:inline-flex;align-items:center;gap:6px;color:#6d7178;white-space:nowrap;}
 .calendar-dot{display:inline-block;width:8px;height:8px;border-radius:999px;flex-shrink:0;}
-.msgrow{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:0 0 14px;margin:0 0 14px;border-bottom:1px solid rgba(214,208,198,0.55);}
-.msgrow:last-child{padding-bottom:0;margin-bottom:0;border-bottom:0;}
-.msgname{font-size:16px;font-weight:700;color:#121212;line-height:1.2;}
-.msgmeta{font-size:12px;color:#474a51;line-height:1.45;margin-top:5px;}
+.msg-summary{max-width:520px;font-size:16px;line-height:1.55;color:#474a51;}
+.msg-note{font-size:12px;color:#6d7178;line-height:1.45;margin-top:8px;}
 .nyt{display:flex;gap:20px;align-items:flex-start;padding:0 0 16px;margin:0 0 16px;border-bottom:1px solid rgba(214,208,198,0.55);}
 .nyt:last-child{padding-bottom:0;margin-bottom:0;border-bottom:0;}
 .nyt-link{display:flex;gap:20px;align-items:flex-start;width:100%;color:inherit;text-decoration:none;}
@@ -95,9 +93,8 @@ a{color:#121212;}
   .list-main{font-size:14px !important;}
   .list-meta{font-size:11px !important;line-height:1.45 !important;}
   .calendar-source{white-space:normal !important;}
-  .msgrow{display:block !important;padding-bottom:12px !important;margin-bottom:12px !important;}
-  .msgname{font-size:15px !important;}
-  .msgmeta{font-size:11px !important;}
+  .msg-summary{font-size:15px !important;line-height:1.5 !important;}
+  .msg-note{font-size:11px !important;}
   .nyt{display:flex !important;gap:10px !important;align-items:flex-start !important;padding-bottom:16px !important;margin-bottom:16px !important;}
   .nyt-link{display:flex !important;gap:10px !important;align-items:flex-start !important;}
   .nytthumb{display:block !important;width:112px !important;height:75px !important;max-width:none !important;flex-shrink:0 !important;margin:0 !important;}
@@ -288,17 +285,18 @@ def _reminders_html(data: dict, *, show_rule: bool = True) -> str:
     return _section("Reminders", "".join(rows), show_rule=show_rule)
 
 
-def _messages_html(threads: list, *, show_rule: bool = True) -> str:
-    rows = []
-    for t in threads:
-        badge = BADGE_REPLY if t["needs_reply"] else ""
-        rows.append(
-            f'<div class="msgrow">'
-            f'<div><div class="msgname">{_esc(t["name"])}</div>'
-            f'<div class="msgmeta">{t["count"]} message{"s" if t["count"] != 1 else ""} · last {_esc(t["last_time"])}</div></div>'
-            f'{badge}</div>'
-        )
-    return _section("Messages", "".join(rows), show_rule=show_rule)
+def _messages_html(data: dict, *, show_rule: bool = True) -> str:
+    summary = _esc(data.get("summary") or "")
+    thread_count = data.get("thread_count", 0)
+    needs_reply_count = data.get("needs_reply_count", 0)
+    note = ""
+    if thread_count:
+        note = f'{thread_count} active conversation{"s" if thread_count != 1 else ""} in the last day'
+        if needs_reply_count:
+            note += f' · {needs_reply_count} still may need a reply'
+        note = f'<div class="msg-note">{_esc(note)}</div>'
+    body = f'<div class="msg-summary">{summary}</div>{note}'
+    return _section("Messages", body, show_rule=show_rule)
 
 
 def _nyt_html(stories: list, *, show_rule: bool = True) -> str:

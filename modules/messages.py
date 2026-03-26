@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import anthropic
 import logging
 import sqlite3
 import time
@@ -11,6 +12,11 @@ log = logging.getLogger(__name__)
 
 # Apple's epoch offset: Mac absolute time starts 2001-01-01
 APPLE_EPOCH_OFFSET = 978307200  # seconds between 1970-01-01 and 2001-01-01
+MESSAGE_SYSTEM_PROMPT = (
+    "You write a short, witty summary of the last day's conversations for a private personal newsletter. "
+    "Two sentences max. Focus on themes, logistics, mood, or social texture rather than listing every thread. "
+    "Do not invent facts, relationships, ages, or backstory. If labels seem stale or ambiguous, stay generic."
+)
 
 
 def _apple_ts_to_unix(apple_ns: int) -> float:
@@ -64,7 +70,20 @@ def resolve_contact(handle_id: str) -> str | None:
         return None
 
 
-def messages_block() -> list | None:
+def _clean_snippet(text: str | None) -> str | None:
+    if not text:
+        return None
+    cleaned = " ".join(text.split())
+    return cleaned[:140] if cleaned else None
+
+
+def _chat_has_column(con: sqlite3.Connection, table: str, column: str) -> bool:
+    rows = con.execute(f"PRAGMA table_info({table})").fetchall()
+    names = {row["name"] for row in rows}
+    return column in names
+
+
+def _threads_from_db() -> list | None:
     try:
         con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
         con.row_factory = sqlite3.Row
@@ -74,10 +93,12 @@ def messages_block() -> list | None:
 
     try:
         cutoff_apple = (time.time() - APPLE_EPOCH_OFFSET - 86400) * 1_000_000_000
+        chat_name_select = "c.display_name AS chat_name," if _chat_has_column(con, "chat", "display_name") else "NULL AS chat_name,"
 
-        rows = con.execute("""
+        rows = con.execute(f"""
             SELECT
                 c.chat_identifier,
+                {chat_name_select}
                 h.id AS handle_id,
                 m.is_from_me,
                 m.date AS ts,
@@ -95,19 +116,29 @@ def messages_block() -> list | None:
             chat_id = row["chat_identifier"]
             handle = row["handle_id"] or ""
             if chat_id not in threads:
-                threads[chat_id] = {"handle": handle, "messages": [], "count": 0}
+                threads[chat_id] = {
+                    "handle": handle,
+                    "chat_name": (row["chat_name"] or "").strip(),
+                    "messages": [],
+                    "count": 0,
+                    "snippet": None,
+                }
             threads[chat_id]["messages"].append({
                 "is_from_me": bool(row["is_from_me"]),
                 "timestamp": row["ts"],
             })
             threads[chat_id]["count"] += 1
+            snippet = _clean_snippet(row["text"])
+            if snippet:
+                threads[chat_id]["snippet"] = snippet
 
         result = []
         for chat_id, data in threads.items():
             handle = data["handle"]
-            name = resolve_contact(handle)
-            is_contact = name is not None
-            if name is None:
+            chat_name = data["chat_name"]
+            name = chat_name or resolve_contact(handle)
+            is_contact = bool(chat_name or name is not None)
+            if not name:
                 name = handle if handle else "Unknown"
 
             last_msg = max(data["messages"], key=lambda m: m["timestamp"])
@@ -122,6 +153,7 @@ def messages_block() -> list | None:
                 "last_time": last_time.strftime("%-I:%M%p").lower(),
                 "_last_ts": last_unix,
                 "needs_reply": needs_reply(data["messages"]),
+                "snippet": data["snippet"],
             })
 
         # Sort: contacts first, then most recent message first
@@ -136,3 +168,95 @@ def messages_block() -> list | None:
         return None
     finally:
         con.close()
+
+
+def _merge_threads(threads: list[dict]) -> list[dict]:
+    merged: dict[str, dict] = {}
+    for thread in threads:
+        key = (thread.get("handle") or thread.get("name") or "").strip().lower()
+        if not key:
+            key = f"unknown:{thread.get('last_time','')}"
+        existing = merged.get(key)
+        if existing is None:
+            merged[key] = {
+                "name": thread["name"],
+                "count": thread["count"],
+                "last_time": thread["last_time"],
+                "_last_ts": thread.get("_last_ts", 0),
+                "needs_reply": thread["needs_reply"],
+                "snippets": [thread["snippet"]] if thread.get("snippet") else [],
+            }
+            continue
+        existing["count"] += thread["count"]
+        existing["needs_reply"] = existing["needs_reply"] or thread["needs_reply"]
+        if thread.get("_last_ts", 0) > existing["_last_ts"]:
+            existing["_last_ts"] = thread["_last_ts"]
+            existing["last_time"] = thread["last_time"]
+            existing["name"] = thread["name"]
+        if thread.get("snippet") and thread["snippet"] not in existing["snippets"]:
+            existing["snippets"].append(thread["snippet"])
+
+    result = list(merged.values())
+    result.sort(key=lambda t: -t["_last_ts"])
+    for thread in result:
+        thread.pop("_last_ts", None)
+    return result
+
+
+def _fallback_summary(threads: list[dict]) -> str:
+    count = len(threads)
+    needs_reply_count = sum(1 for thread in threads if thread["needs_reply"])
+    if needs_reply_count:
+        return f"{count} active conversations in the last day, with {needs_reply_count} still nudging for a reply."
+    return f"{count} active conversations in the last day, mostly the usual swirl of logistics and check-ins."
+
+
+def _summarize_threads(api_key: str | None, threads: list[dict]) -> str | None:
+    if not threads:
+        return None
+    if not api_key:
+        return _fallback_summary(threads)
+
+    lines = []
+    for thread in threads[:8]:
+        flags = []
+        if thread["needs_reply"]:
+            flags.append("needs reply")
+        snippet = thread.get("snippet")
+        snippet_text = f" snippet: {snippet}" if snippet else ""
+        flag_text = f" ({', '.join(flags)})" if flags else ""
+        lines.append(
+            f"- {thread['name']}: {thread['count']} messages, last {thread['last_time']}{flag_text}.{snippet_text}"
+        )
+
+    prompt = (
+        "Summarize these message threads from the last 24 hours for a private personal morning email. "
+        "Keep it to one or two witty sentences. Prefer themes over exhaustive detail.\n\n"
+        + "\n".join(lines)
+    )
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=120,
+            system=MESSAGE_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.content[0].text.strip()
+    except Exception:
+        log.warning("Failed to summarize message threads with Anthropic", exc_info=True)
+        return _fallback_summary(threads)
+
+
+def messages_block(api_key: str | None = None) -> dict | None:
+    threads = _threads_from_db()
+    if threads is None:
+        return None
+    merged = _merge_threads(threads)
+    if not merged:
+        return {"summary": "No meaningful conversation traffic in the last day.", "thread_count": 0, "needs_reply_count": 0}
+    return {
+        "summary": _summarize_threads(api_key, merged),
+        "thread_count": len(merged),
+        "needs_reply_count": sum(1 for thread in merged if thread["needs_reply"]),
+    }
