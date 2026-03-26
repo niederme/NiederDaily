@@ -16,10 +16,14 @@ def test_weather_html_shows_location():
     html = _weather_html({"locations": [BASE_LOC]})
     assert "Warwick, NY" in html
 
-def test_weather_html_shows_high_low():
+def test_weather_html_shows_current_temp():
     html = _weather_html({"locations": [BASE_LOC]})
-    assert "61°" in html
-    assert "44°" in html
+    assert "54°" in html
+
+def test_weather_html_shows_high_low_in_metadata():
+    html = _weather_html({"locations": [BASE_LOC]})
+    assert "High 61°" in html
+    assert "Low 44°" in html
 
 def test_weather_html_shows_sentence():
     html = _weather_html({"locations": [BASE_LOC]})
