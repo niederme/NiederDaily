@@ -163,7 +163,7 @@ def load_config(path: str = None) -> dict:
 - [ ] **Step 4: Run tests**
 
 ```bash
-pytest tests/test_weather.py::test_config_requires_weatherkit_keys tests/test_weather.py::test_config_requires_weatherkit_subkeys -v
+pytest tests/test_weather.py::test_config_requires_weatherkit_keys tests/test_weather.py::test_config_requires_weatherkit_subkeys tests/test_weather.py::test_config_rejects_blank_weatherkit_subkeys tests/test_weather.py::test_config_rejects_fill_in_weatherkit_subkeys -v
 ```
 
 Expected: both PASS.

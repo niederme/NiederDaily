@@ -104,9 +104,9 @@ GET https://weatherkit.apple.com/api/v1/weather/en/{lat}/{lon}
 
 **Weather alerts availability:** The `weatherAlerts` key is only present in the response for supported regions (primarily US). Always use `data.get("weatherAlerts", {}).get("alerts", [])` — never direct key access.
 
-### Condition Code → Label and Emoji Mappings
+### Condition Code → Label Mapping
 
-Two parallel dicts — `CONDITION_LABELS` for the display string (used by `welcome.py`) and `CONDITION_ICONS` for emoji (used by `renderer.py`):
+`CONDITION_LABELS` maps WeatherKit condition codes to human-readable strings used by `welcome.py` and passed to the renderer's existing `_weather_icon()` SVG function. No separate emoji dict is needed — `_weather_icon(condition)` already keyword-matches on the label string ("rain", "snow", "thunder", "clear", "fog") and works with WeatherKit label strings without modification.
 
 ```python
 CONDITION_LABELS = {
@@ -146,45 +146,10 @@ CONDITION_LABELS = {
     "TropicalStorm": "Tropical Storm",
 }
 
-CONDITION_ICONS = {
-    "Clear": "☀️",
-    "MostlyClear": "🌤",
-    "PartlyCloudy": "⛅",
-    "MostlyCloudy": "🌥",
-    "Cloudy": "☁️",
-    "Foggy": "🌫",
-    "Haze": "🌫",
-    "Smoky": "🌫",
-    "Breezy": "🌬",
-    "Windy": "💨",
-    "Drizzle": "🌦",
-    "Rain": "🌧",
-    "HeavyRain": "🌧",
-    "SunShowers": "🌦",
-    "Thunderstorms": "⛈",
-    "IsolatedThunderstorms": "⛈",
-    "ScatteredThunderstorms": "⛈",
-    "StrongStorms": "⛈",
-    "Flurries": "🌨",
-    "Snow": "❄️",
-    "SunFlurries": "🌨",
-    "Sleet": "🌨",
-    "WintryMix": "🌨",
-    "FreezingDrizzle": "🌧",
-    "FreezingRain": "🌧",
-    "BlowingSnow": "🌨",
-    "HeavySnow": "❄️",
-    "Blizzard": "🌨",
-    "BlowingDust": "🌬",
-    "Frigid": "🥶",
-    "Hail": "🌨",
-    "Hot": "🥵",
-    "Hurricane": "🌀",
-    "TropicalStorm": "🌀",
 }
 ```
 
-Unknown condition codes fall back to `"condition"` → `"Unknown"` and `"icon"` → `"🌡"`.
+Unknown condition codes fall back to `"Unknown"`.
 
 ### Return Dict
 
@@ -197,14 +162,13 @@ Unknown condition codes fall back to `"condition"` → `"Unknown"` and `"icon"` 
 }
 ```
 
-The per-location dict has the same keys as today, with three additions (`icon`, `alerts`, `sentence`):
+The per-location dict has the same keys as today, with two additions (`alerts`, `sentence`) and renames `summary` → `sentence`:
 
 ```python
 {
     "location": str,       # location display name
     "temp": int,           # current temp in °F
-    "condition": str,      # human-readable label, e.g. "Partly Cloudy" — used by welcome.py
-    "icon": str,           # emoji, e.g. "⛅" — used by renderer
+    "condition": str,      # human-readable label, e.g. "Partly Cloudy" — used by welcome.py and _weather_icon()
     "high": int,           # daily high in °F
     "low": int,            # daily low in °F
     "sunrise": str,        # e.g. "6:52am"
