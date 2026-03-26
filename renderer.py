@@ -20,7 +20,7 @@ SECTION_LABEL_STYLE = f"font-size:16px;font-weight:700;letter-spacing:-0.01em;co
 BASE_STYLES = """
 body{margin:0;padding:0;background:#ffffff;color:#121212;font-family:Sohne,"SF Pro Text","SF Pro Display",-apple-system,BlinkMacSystemFont,"Helvetica Neue","Arial Nova",Arial,sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
 a{color:#121212;}
-.wrap{max-width:680px;margin:0 auto;padding:24px 20px 48px;}
+.wrap{max-width:680px;margin:0 auto;padding:24px 18px 48px;}
 .email{background:#ffffff;overflow:hidden;}
 .header{padding:44px 40px 24px;}
 .date-line{font-size:16px;font-weight:300;line-height:1.35;letter-spacing:-0.01em;color:#474a51;max-width:520px;margin-bottom:12px;}
@@ -60,11 +60,11 @@ a{color:#121212;}
 .footer a{color:#121212;text-decoration:none;border-bottom:1px solid rgba(18,18,18,0.65);}
 @media only screen and (max-width: 640px){
   .wrap{max-width:100% !important;}
-  .wrap{padding:16px 10px 32px !important;}
-  .header{padding:24px 12px 16px !important;}
-  .section{padding:0 12px 18px !important;}
-  .photo-caption{padding:12px 12px !important;}
-  .footer{padding:16px 12px 24px !important;}
+  .wrap{padding:12px 8px 28px !important;}
+  .header{padding:22px 10px 16px !important;}
+  .section{padding:0 10px 18px !important;}
+  .photo-caption{padding:12px 10px !important;}
+  .footer{padding:16px 10px 24px !important;}
   .date-line{font-size:14px !important;margin-bottom:8px !important;}
   .logo{font-size:36px !important;margin-bottom:12px !important;}
   .welcome{font-size:16px !important;line-height:1.45 !important;}
