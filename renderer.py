@@ -70,14 +70,14 @@ a{color:#121212;}
 .photo-meta{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-top:10px;font-size:11px;line-height:1.45;color:#6d7178;}
 .photo-keywords{font-size:11px;line-height:1.45;color:#6d7178;margin-top:6px;}
 .photo-open{color:#121212;text-decoration:none;border-bottom:1px solid rgba(18,18,18,0.4);}
-.footer{padding:18px 40px 36px;font-size:11px;color:#474a51;border-top:0;background:#ffffff;}
+.footer{padding:28px 40px 36px;font-size:11px;color:#474a51;border-top:1px solid rgba(214,208,198,0.8);background:#ffffff;}
 .footer a{color:#121212;text-decoration:none;border-bottom:1px solid rgba(18,18,18,0.65);}
 @media only screen and (max-width: 640px){
   .wrap{max-width:100% !important;}
   .wrap{padding:12px 8px 28px !important;}
   .header{padding:22px 10px 16px !important;}
   .section{padding:0 10px 18px !important;}
-  .footer{padding:16px 10px 24px !important;}
+  .footer{padding:22px 10px 24px !important;}
   .date-line{font-size:14px !important;margin-bottom:8px !important;}
   .logo{font-size:36px !important;margin-bottom:12px !important;}
   .welcome{font-size:16px !important;line-height:1.45 !important;}
@@ -329,10 +329,6 @@ def _photo_html(photo: tuple, *, show_rule: bool = True) -> str:
     meta_bits = []
     if meta.get("location"):
         meta_bits.append(_esc(meta["location"]))
-    face_count = meta.get("face_count") or 0
-    if face_count:
-        noun = "face" if face_count == 1 else "faces"
-        meta_bits.append(f"{face_count} {noun}")
     if meta.get("is_favorite"):
         meta_bits.append("Favorite")
     meta_line = " · ".join(meta_bits)

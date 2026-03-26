@@ -68,7 +68,8 @@ def test_render_includes_photo_attachment():
     assert "March 25, 2019" in html
     assert "Open in Photos" in html
     assert "Flash photo after drinks." in html
-    assert "2 faces" in html
+    assert "Favorite" in html
+    assert "2 faces" not in html
     assert "IMG_1234.JPG" not in html
     assert "Keywords: friends, night" in html
     assert "photo-caption" not in html

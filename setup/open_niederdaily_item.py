@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from datetime import datetime
@@ -91,9 +92,25 @@ end tell'''
 end tell'''
 
 
+def _read_payload_text() -> str:
+    if len(sys.argv) > 1 and sys.argv[1].strip():
+        return sys.argv[1].strip()
+
+    for env_key in ("SHORTCUT_INPUT", "SHORTCUTS_INPUT"):
+        env_value = os.environ.get(env_key, "").strip()
+        if env_value:
+            return env_value
+
+    stdin_value = sys.stdin.read().strip()
+    if stdin_value:
+        return stdin_value
+    raise ValueError(
+        "Open NiederDaily Item did not receive any input. In Shortcuts, set the Run Shell Script action to pass input to stdin."
+    )
+
+
 def main() -> int:
-    raw = sys.argv[1] if len(sys.argv) > 1 else sys.stdin.read()
-    payload = json.loads(raw)
+    payload = json.loads(_read_payload_text())
     item_type = payload.get("type")
     if item_type == "calendar":
         return _run_applescript(_calendar_script(payload))

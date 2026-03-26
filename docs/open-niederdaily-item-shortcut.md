@@ -32,11 +32,18 @@ The shortcut receives JSON text input. Examples:
 
 ### macOS shortcut
 
-The easiest Mac setup is a single `Run Shell Script` action:
+The easiest Mac setup is a single `Run Shell Script` action.
+
+Use this script:
 
 ```bash
-/Users/niederme/~Repos/NiederDaily/.venv/bin/python /Users/niederme/~Repos/NiederDaily/setup/open_niederdaily_item.py "$SHORTCUT_INPUT"
+/Users/niederme/~Repos/NiederDaily/.venv/bin/python /Users/niederme/~Repos/NiederDaily/setup/open_niederdaily_item.py
 ```
+
+Set:
+
+- Shell: `/bin/zsh`
+- Pass Input: `to stdin`
 
 That helper script already knows how to:
 
