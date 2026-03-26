@@ -1,15 +1,18 @@
 from __future__ import annotations
 
+import json
 from datetime import date
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
 from html import escape as _esc
+from urllib.parse import urlencode
 
 ACCENT = "#ff453a"
 INK = "#121212"
 MUTED = "#474a51"
 LINE = "#d6d0c6"
+SHORTCUT_NAME = "Open NiederDaily Item"
 
 BADGE_OVERDUE = f'<span style="display:inline-block;min-width:56px;color:{ACCENT};font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Overdue</span>'
 BADGE_TODAY = f'<span style="display:inline-block;min-width:56px;color:{ACCENT};font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Today</span>'
@@ -41,6 +44,8 @@ a{color:#121212;}
 .list-row:last-child{padding-bottom:0;margin-bottom:0;border-bottom:0;}
 .list-time{min-width:56px;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#474a51;}
 .list-main{flex:1;font-size:15px;line-height:1.35;color:#121212;}
+.item-link{color:#121212;text-decoration:none;}
+.item-link:hover{text-decoration:underline;}
 .list-meta{display:block;font-size:12px;line-height:1.4;color:#474a51;margin-top:4px;}
 .meta-sep{color:#9aa0a6;margin:0 6px;}
 .calendar-source{display:inline-flex;align-items:center;gap:6px;color:#6d7178;white-space:nowrap;}
@@ -55,7 +60,14 @@ a{color:#121212;}
 .nythed{font-size:17px;font-weight:700;line-height:1.18;color:#121212;margin-bottom:6px;}
 .nytdek{font-size:13px;color:#474a51;line-height:1.42;}
 .nytbyline{font-size:11px;color:#474a51;line-height:1.4;margin-top:7px;}
-.photo-caption{padding:14px 40px;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#474a51;background:#f5efe5;border-bottom:1px solid #d6d0c6;}
+.photo-module{max-width:520px;margin:0 auto;}
+.photo-date{font-size:13px;line-height:1.4;color:#474a51;margin-bottom:12px;}
+.photo-frame{display:block;border-radius:14px;overflow:hidden;border:1px solid rgba(214,208,198,0.7);background:#ffffff;line-height:0;}
+.photo-frame img{width:100%;display:block;}
+.photo-description{font-size:13px;line-height:1.45;color:#474a51;margin-top:10px;}
+.photo-meta{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-top:10px;font-size:11px;line-height:1.45;color:#6d7178;}
+.photo-keywords{font-size:11px;line-height:1.45;color:#6d7178;margin-top:6px;}
+.photo-open{color:#121212;text-decoration:none;border-bottom:1px solid rgba(18,18,18,0.4);}
 .footer{padding:18px 40px 36px;font-size:11px;color:#474a51;border-top:0;background:#ffffff;}
 .footer a{color:#121212;text-decoration:none;border-bottom:1px solid rgba(18,18,18,0.65);}
 @media only screen and (max-width: 640px){
@@ -63,7 +75,6 @@ a{color:#121212;}
   .wrap{padding:12px 8px 28px !important;}
   .header{padding:22px 10px 16px !important;}
   .section{padding:0 10px 18px !important;}
-  .photo-caption{padding:12px 10px !important;}
   .footer{padding:16px 10px 24px !important;}
   .date-line{font-size:14px !important;margin-bottom:8px !important;}
   .logo{font-size:36px !important;margin-bottom:12px !important;}
@@ -90,6 +101,8 @@ a{color:#121212;}
   .nythed{font-size:16px !important;margin-bottom:5px !important;}
   .nytdek{font-size:12px !important;line-height:1.45 !important;}
   .nytbyline{font-size:11px !important;margin-top:6px !important;}
+  .photo-date{font-size:12px !important;margin-bottom:10px !important;}
+  .photo-meta{font-size:11px !important;gap:8px !important;}
 }
 """
 
@@ -102,6 +115,21 @@ def _section(label: str | None, content: str, *, show_rule: bool = True) -> str:
     rule = '<div class="section-rule"></div>' if show_rule else ""
     heading = _label(label) if label else ""
     return f'<div class="section">{rule}{heading}{content}</div>'
+
+
+def _shortcut_url(item_type: str, payload: dict) -> str:
+    body = {"type": item_type, **payload}
+    query = urlencode({
+        "name": SHORTCUT_NAME,
+        "input": "text",
+        "text": json.dumps(body, separators=(",", ":")),
+    })
+    return f"shortcuts://run-shortcut?{query}"
+
+
+def _linked_text(item_type: str, text: str, payload: dict) -> str:
+    href = _shortcut_url(item_type, payload)
+    return f'<a class="item-link" href="{_esc(href)}">{_esc(text)}</a>'
 
 
 def _weather_icon(condition: str) -> str:
@@ -194,10 +222,22 @@ def _calendar_html(events: list, *, show_rule: bool = True) -> str:
         if meta_parts:
             meta_sep = '<span class="meta-sep">·</span>'
             loc = f'<span class="list-meta">{meta_sep.join(meta_parts)}</span>'
+        title = _linked_text(
+            "calendar",
+            e["title"],
+            {
+                "identifier": e.get("identifier"),
+                "date": date.today().isoformat(),
+                "time": e.get("time"),
+                "calendar": e.get("calendar"),
+                "location": e.get("location"),
+                "title": e["title"],
+            },
+        )
         rows.append(
             f'<div class="list-row">'
             f'<span class="list-time">{time_str}</span>'
-            f'<div class="list-main">{_esc(e["title"])}{loc}</div></div>'
+            f'<div class="list-main">{title}{loc}</div></div>'
         )
     return _section("Calendar", "".join(rows), show_rule=show_rule)
 
@@ -213,9 +253,19 @@ def _reminders_html(data: dict, *, show_rule: bool = True) -> str:
 
     rows = []
     for r in data.get("overdue", []):
-        rows.append(f'<div class="list-row"><span class="list-time">{BADGE_OVERDUE}</span><div class="list-main">{_esc(r["title"])}{reminder_meta(r)}</div></div>')
+        title = _linked_text(
+            "reminder",
+            r["title"],
+            {"identifier": r.get("identifier"), "due": r.get("due"), "list": r.get("list"), "title": r["title"]},
+        )
+        rows.append(f'<div class="list-row"><span class="list-time">{BADGE_OVERDUE}</span><div class="list-main">{title}{reminder_meta(r)}</div></div>')
     for r in data.get("today", []):
-        rows.append(f'<div class="list-row"><span class="list-time">{BADGE_TODAY}</span><div class="list-main">{_esc(r["title"])}{reminder_meta(r)}</div></div>')
+        title = _linked_text(
+            "reminder",
+            r["title"],
+            {"identifier": r.get("identifier"), "due": r.get("due"), "list": r.get("list"), "title": r["title"]},
+        )
+        rows.append(f'<div class="list-row"><span class="list-time">{BADGE_TODAY}</span><div class="list-main">{title}{reminder_meta(r)}</div></div>')
     next_day = None
     for r in data.get("upcoming", []):
         due_raw = r.get("due")
@@ -229,7 +279,12 @@ def _reminders_html(data: dict, *, show_rule: bool = True) -> str:
         except Exception:
             due = due_raw
         badge = f'<span style="display:inline-block;min-width:56px;color:{MUTED};font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">{due}</span>'
-        rows.append(f'<div class="list-row"><span class="list-time">{badge}</span><div class="list-main">{_esc(r["title"])}{reminder_meta(r)}</div></div>')
+        title = _linked_text(
+            "reminder",
+            r["title"],
+            {"identifier": r.get("identifier"), "due": r.get("due"), "list": r.get("list"), "title": r["title"]},
+        )
+        rows.append(f'<div class="list-row"><span class="list-time">{badge}</span><div class="list-main">{title}{reminder_meta(r)}</div></div>')
     if not rows:
         return _section("Reminders", '<div class="supporting">All clear.</div>', show_rule=show_rule)
     return _section("Reminders", "".join(rows), show_rule=show_rule)
@@ -265,6 +320,54 @@ def _nyt_html(stories: list, *, show_rule: bool = True) -> str:
     return _section("New York Times Most Popular", "".join(rows), show_rule=show_rule)
 
 
+def _photo_html(photo: tuple, *, show_rule: bool = True) -> str:
+    _, meta = photo
+    raw_date = meta.get("date")
+    try:
+        pretty_date = date.fromisoformat(raw_date).strftime("%B %-d, %Y")
+    except Exception:
+        pretty_date = raw_date or "Today"
+
+    meta_bits = []
+    if meta.get("location"):
+        meta_bits.append(_esc(meta["location"]))
+    if meta.get("filename"):
+        meta_bits.append(_esc(meta["filename"]))
+    if meta.get("is_favorite"):
+        meta_bits.append("Favorite")
+    meta_line = " · ".join(meta_bits)
+    description = meta.get("description") or meta.get("title")
+    description_html = f'<div class="photo-description">{_esc(description)}</div>' if description else ""
+    keywords_html = ""
+    keywords = [keyword for keyword in meta.get("keywords", []) if keyword]
+    if keywords:
+        keywords_html = f'<div class="photo-keywords">Keywords: {_esc(", ".join(keywords[:6]))}</div>'
+
+    open_link = _shortcut_url(
+        "photo",
+        {
+            "date": meta.get("date"),
+            "year": meta.get("year"),
+            "location": meta.get("location"),
+            "filename": meta.get("filename"),
+            "title": meta.get("title"),
+            "favorite": bool(meta.get("is_favorite")),
+        },
+    )
+    open_html = f'<a class="photo-open" href="{_esc(open_link)}">Open in Photos</a>'
+    meta_html = f'<div class="photo-meta"><span>{meta_line}</span><span>{open_html}</span></div>' if meta_line else f'<div class="photo-meta"><span></span><span>{open_html}</span></div>'
+    body = (
+        '<div class="photo-module">'
+        f'<div class="photo-date">{_esc(pretty_date)}</div>'
+        '<div class="photo-frame"><img src="cid:onthisday" alt="On This Day photo"></div>'
+        f'{description_html}'
+        f'{meta_html}'
+        f'{keywords_html}'
+        '</div>'
+    )
+    return _section("On This Day", body, show_rule=show_rule)
+
+
 def render_email(
     recipient: str,
     welcome: str | None,
@@ -296,24 +399,9 @@ def render_email(
     if messages:
         sections.append(_messages_html(messages, show_rule=next_section_rule))
         next_section_rule = True
-
-    photo_html = ""
     if photo:
-        _, meta = photo
-        caption_parts = []
-        if meta.get("location"):
-            caption_parts.append(_esc(meta["location"]))
-        if meta.get("date"):
-            caption_parts.append(_esc(meta["date"]))
-        if meta.get("is_favorite"):
-            caption_parts.append("★ Favorite")
-        caption = " · ".join(caption_parts)
-        photo_html = (
-            '<div style="line-height:0;">'
-            '<img src="cid:onthisday" style="width:100%;max-width:600px;display:block;" alt="On This Day">'
-            '</div>'
-            f'<div class="photo-caption">{caption}</div>'
-        )
+        sections.append(_photo_html(photo, show_rule=next_section_rule))
+        next_section_rule = True
 
     if nyt:
         sections.append(_nyt_html(nyt, show_rule=next_section_rule))
@@ -331,7 +419,6 @@ def render_email(
     {welcome_html}
   </div>
   {"".join(sections)}
-  {photo_html}
   <div class="footer">NiederDaily · <a href="mailto:{recipient}">{recipient}</a> · Every morning at 6am</div>
 </div>
 </div>

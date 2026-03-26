@@ -120,6 +120,14 @@ def _list_name(reminder) -> str | None:
         return None
 
 
+def _reminder_identifier(reminder) -> str | None:
+    try:
+        identifier = reminder.calendarItemIdentifier()
+        return identifier.strip() if identifier else None
+    except Exception:
+        return None
+
+
 def _list_color(reminder) -> str | None:
     try:
         calendar = reminder.calendar()
@@ -177,6 +185,7 @@ def reminders_block(lists: list | None = None) -> dict | None:
                 "title": title,
                 "due": due_str,
                 "list": _list_name(reminder),
+                "identifier": _reminder_identifier(reminder),
                 "list_color": _list_color(reminder),
             }
             if due < today:

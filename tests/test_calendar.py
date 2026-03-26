@@ -18,6 +18,7 @@ def _make_event(title, ts, location="", all_day=False):
     event.location.return_value = location
     event.isAllDay.return_value = all_day
     event.startDate.return_value = _FakeNSDate(ts)
+    event.calendarItemIdentifier.return_value = "event-123"
     event.calendar.return_value.title.return_value = "Personal"
     event.calendar.return_value.colorStringRaw.return_value = "#0088FF"
     return event
@@ -44,6 +45,7 @@ def test_calendar_block_parses_events(mocker):
     assert result[0]["title"] == "Weekly sync"
     assert result[0]["location"] == "Zoom"
     assert result[0]["calendar"] == "Personal"
+    assert result[0]["identifier"] == "event-123"
     assert result[0]["calendar_color"] == "#0088FF"
     assert result[0]["all_day"] is False
     assert result[2]["all_day"] is True

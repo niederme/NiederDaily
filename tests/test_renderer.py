@@ -5,10 +5,10 @@ from pathlib import Path
 from renderer import render_email
 
 WEATHER = {"locations": [{"location": "Warwick, NY", "temp": 54, "condition": "Overcast", "high": 61, "low": 44, "sunrise": "6:52am", "sunset": "7:31pm", "summary": "Gusts up to 28 mph this afternoon. Warmer tomorrow, with a high of 70°."}], "travel_city": None}
-CALENDAR = [{"time": "9:00am", "title": "Weekly sync", "location": "Zoom", "calendar": "Personal", "calendar_color": "#0088FF", "all_day": False}]
-REMINDERS = {"overdue": [{"title": "Call accountant", "due": "2026-03-20", "list": "House Wish List", "list_color": "#0088FF"}], "today": [], "upcoming": []}
+CALENDAR = [{"time": "9:00am", "title": "Weekly sync", "location": "Zoom", "calendar": "Personal", "identifier": "event-123", "calendar_color": "#0088FF", "all_day": False}]
+REMINDERS = {"overdue": [{"title": "Call accountant", "due": "2026-03-20", "list": "House Wish List", "identifier": "reminder-123", "list_color": "#0088FF"}], "today": [], "upcoming": []}
 MESSAGES = [{"name": "Mom", "handle": "+15555550101", "is_contact": True, "count": 4, "last_time": "8:14pm", "needs_reply": True}]
-PHOTO = (b'\xff\xd8\xff' + b'\x00' * 100, {"year": "2019", "date": "2019-03-25", "location": "Warwick, NY", "is_favorite": True})
+PHOTO = (b'\xff\xd8\xff' + b'\x00' * 100, {"year": "2019", "date": "2019-03-25", "location": "Warwick, NY", "is_favorite": True, "title": "Downtown selfie", "description": "Flash photo after drinks.", "keywords": ["friends", "night"], "filename": "IMG_1234.JPG"})
 NYT = [{"title": "Story One", "abstract": "Things happened.", "byline": "By Reporter One", "url": "https://nytimes.com/1", "thumbnail": None}]
 
 def test_render_returns_mime_message():
@@ -63,6 +63,15 @@ def test_render_includes_photo_attachment():
         recipient="me@example.com", welcome=None,
         weather=None, calendar=None, reminders=None, messages=None, photo=PHOTO, nyt=None
     )
+    html_part = next(p for p in msg.get_payload() if p.get_content_type() == "text/html")
+    html = html_part.get_payload(decode=True).decode()
+    assert "On This Day" in html
+    assert "March 25, 2019" in html
+    assert "Open in Photos" in html
+    assert "Flash photo after drinks." in html
+    assert "IMG_1234.JPG" in html
+    assert "Keywords: friends, night" in html
+    assert "photo-caption" not in html
     payloads = msg.get_payload()
     content_ids = [p.get("Content-ID", "") for p in payloads if hasattr(p, 'get')]
     assert any("onthisday" in cid for cid in content_ids)
@@ -128,6 +137,7 @@ def test_render_reminders_include_list_label_and_color():
     html = html_part.get_payload(decode=True).decode()
     assert "House Wish List" in html
     assert "#0088FF" in html
+    assert "shortcuts://run-shortcut?name=Open+NiederDaily+Item" in html
 
 
 def test_render_nyt_without_thumbnail_has_no_placeholder_block():
@@ -139,3 +149,24 @@ def test_render_nyt_without_thumbnail_has_no_placeholder_block():
     html = html_part.get_payload(decode=True).decode()
     assert 'class="nytthumb"' not in html
     assert "By Reporter One" in html
+
+
+def test_render_places_photo_before_news():
+    msg = render_email(
+        recipient="me@example.com", welcome=None,
+        weather=None, calendar=None, reminders=None, messages=None, photo=PHOTO, nyt=NYT
+    )
+    html_part = next(p for p in msg.get_payload() if p.get_content_type() == "text/html")
+    html = html_part.get_payload(decode=True).decode()
+    assert html.index("On This Day") < html.index("New York Times Most Popular")
+
+
+def test_render_calendar_titles_use_shortcuts_links():
+    msg = render_email(
+        recipient="me@example.com", welcome=None,
+        weather=None, calendar=CALENDAR, reminders=None, messages=None, photo=None, nyt=None
+    )
+    html_part = next(p for p in msg.get_payload() if p.get_content_type() == "text/html")
+    html = html_part.get_payload(decode=True).decode()
+    assert "shortcuts://run-shortcut?name=Open+NiederDaily+Item" in html
+    assert "event-123" in html

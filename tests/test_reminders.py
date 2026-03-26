@@ -24,6 +24,7 @@ class _FakeComponents:
 def _make_reminder(title, due):
     reminder = MagicMock()
     reminder.title.return_value = title
+    reminder.calendarItemIdentifier.return_value = "reminder-123"
     if due is None:
         reminder.dueDateComponents.return_value = None
     else:
@@ -76,6 +77,7 @@ def test_today_items(mocker):
         "title": "Today task",
         "due": today.isoformat(),
         "list": "House Wish List",
+        "identifier": "reminder-123",
         "list_color": "#0088FF",
     }]
     assert result["overdue"] == []

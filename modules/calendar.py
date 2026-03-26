@@ -102,6 +102,14 @@ def _calendar_name(event) -> str | None:
         return None
 
 
+def _calendar_identifier(event) -> str | None:
+    try:
+        identifier = event.calendarItemIdentifier()
+        return identifier.strip() if identifier else None
+    except Exception:
+        return None
+
+
 def _calendar_color(event) -> str | None:
     try:
         calendar = event.calendar()
@@ -167,6 +175,7 @@ def calendar_block(calendars: list | None = None) -> list | None:
                 "title": title,
                 "location": location,
                 "calendar": _calendar_name(event),
+                "identifier": _calendar_identifier(event),
                 "calendar_color": _calendar_color(event),
                 "all_day": time_val is None,
             })

@@ -28,14 +28,19 @@ tell application "Photos"
         if month of d as integer = targetMonth and day of d as integer = targetDay then
             set yr to year of d as string
             set loc to ""
+            set itemName to ""
             try
                 set loc to location of m
                 if loc is missing value then set loc to ""
             end try
+            try
+                set itemName to name of m
+                if itemName is missing value then set itemName to ""
+            end try
             set fav to favorite of m
             set fc to 0
             -- face_count is always 0 since Photos.app does not expose face count via AppleScript
-            set output to output & (id of m) & "|" & yr & "-" & my pad(month of d as integer) & "-" & my pad(day of d as integer) & "|" & loc & "|" & fav & "|" & fc & "\\n"
+            set output to output & (id of m) & "|" & yr & "-" & my pad(month of d as integer) & "-" & my pad(day of d as integer) & "|" & loc & "|" & fav & "|" & fc & "|" & itemName & "\\n"
         end if
     end repeat
 end tell
@@ -63,6 +68,107 @@ def _select_best(photos: list) -> dict:
     if favorites:
         return min(favorites, key=lambda p: p["date"])
     return min(photos, key=lambda p: p["date"])
+
+
+def _first_string(value) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        cleaned = value.strip()
+        return cleaned or None
+    if isinstance(value, bytes):
+        cleaned = value.decode("utf-8", errors="ignore").strip()
+        return cleaned or None
+    return None
+
+
+def _asset_keywords(asset) -> list[str]:
+    candidates = []
+    for attr in ("keywordProperties", "keywords"):
+        try:
+            value = getattr(asset, attr, None)
+            if value is None:
+                continue
+            candidate = value() if callable(value) else value
+            if candidate is not None:
+                candidates = list(candidate)
+                break
+        except Exception:
+            continue
+
+    results = []
+    for keyword in candidates:
+        text = None
+        for attr in ("keyword", "title", "name"):
+            try:
+                value = getattr(keyword, attr, None)
+                if value is None:
+                    continue
+                text = value() if callable(value) else value
+            except Exception:
+                continue
+            cleaned = _first_string(text)
+            if cleaned:
+                results.append(cleaned)
+                break
+        else:
+            cleaned = _first_string(keyword)
+            if cleaned:
+                results.append(cleaned)
+    deduped = []
+    seen = set()
+    for keyword in results:
+        lower = keyword.lower()
+        if lower in seen:
+            continue
+        seen.add(lower)
+        deduped.append(keyword)
+    return deduped
+
+
+def _asset_text_metadata(asset, resource) -> dict:
+    metadata = {
+        "title": None,
+        "description": None,
+        "keywords": [],
+        "filename": None,
+    }
+
+    for attr in ("title", "filename", "originalFilename"):
+        try:
+            value = getattr(asset, attr, None)
+            if value is None:
+                continue
+            cleaned = _first_string(value() if callable(value) else value)
+            if not cleaned:
+                continue
+            if attr == "title":
+                metadata["title"] = cleaned
+            else:
+                metadata["filename"] = cleaned
+        except Exception:
+            continue
+
+    if not metadata["filename"] and resource is not None:
+        try:
+            metadata["filename"] = _first_string(resource.originalFilename())
+        except Exception:
+            pass
+
+    for key in ("assetDescription", "photoDescription", "caption", "title"):
+        try:
+            cleaned = _first_string(asset.valueForKey_(key))
+        except Exception:
+            cleaned = None
+        if cleaned:
+            if key == "title" and metadata["title"] is None:
+                metadata["title"] = cleaned
+            elif key != "title":
+                metadata["description"] = cleaned
+                break
+
+    metadata["keywords"] = _asset_keywords(asset)
+    return metadata
 
 
 def _photo_readable_statuses() -> set[int]:
@@ -165,6 +271,7 @@ def _native_photo_block() -> tuple | None:
         if resource is None:
             log.warning("PhotoKit found asset %s but no exportable resources", chosen["id"])
             return None
+        text_meta = _asset_text_metadata(asset, resource)
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             filename = resource.originalFilename() or "onthisday.jpeg"
@@ -208,6 +315,10 @@ def _native_photo_block() -> tuple | None:
                 "date": chosen["date"],
                 "location": chosen["location"],
                 "is_favorite": chosen["is_favorite"],
+                "title": text_meta["title"],
+                "description": text_meta["description"],
+                "keywords": text_meta["keywords"],
+                "filename": text_meta["filename"],
                 "format": img_suffix or "jpeg",
             },
         )
@@ -236,12 +347,14 @@ def _applescript_photo_block() -> tuple | None:
             if len(parts) < 5:
                 continue
             photo_id, date_str, location, is_fav_str, face_count_str = parts[:5]
+            item_name = parts[5].strip() if len(parts) > 5 else ""
             photos.append({
                 "id": photo_id.strip(),
                 "date": date_str.strip(),
                 "location": location.strip(),
                 "is_favorite": is_fav_str.strip().lower() == "true",
                 "face_count": int(face_count_str.strip()) if face_count_str.strip().isdigit() else 0,
+                "title": item_name or None,
             })
 
         if not photos:
@@ -276,6 +389,10 @@ def _applescript_photo_block() -> tuple | None:
             "date": chosen["date"],
             "location": chosen["location"],
             "is_favorite": chosen["is_favorite"],
+            "title": chosen.get("title"),
+            "description": None,
+            "keywords": [],
+            "filename": exported.name,
             "format": img_suffix or "jpeg",
         }
         return (img_bytes, meta)
