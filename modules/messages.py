@@ -3,6 +3,7 @@ from __future__ import annotations
 import anthropic
 import logging
 import sqlite3
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -15,8 +16,38 @@ APPLE_EPOCH_OFFSET = 978307200  # seconds between 1970-01-01 and 2001-01-01
 MESSAGE_SYSTEM_PROMPT = (
     "You write a short, witty summary of the last day's conversations for a private personal newsletter. "
     "Two sentences max. Focus on themes, logistics, mood, or social texture rather than listing every thread. "
+    "Do not over-index on message volume. Do not foreground unknown numbers unless they are clearly central. "
     "Do not invent facts, relationships, ages, or backstory. If labels seem stale or ambiguous, stay generic."
 )
+
+
+def contacts_access_granted(prompt: bool = False) -> bool:
+    try:
+        import Contacts
+    except Exception:
+        return False
+
+    store = Contacts.CNContactStore.alloc().init()
+    status = Contacts.CNContactStore.authorizationStatusForEntityType_(Contacts.CNEntityTypeContacts)
+    if status == Contacts.CNAuthorizationStatusAuthorized:
+        return True
+
+    if not prompt or status == Contacts.CNAuthorizationStatusDenied:
+        return False
+
+    if hasattr(Contacts, "CNAuthorizationStatusLimited") and status == Contacts.CNAuthorizationStatusLimited:
+        return True
+
+    granted_holder = {"value": False}
+    finished = threading.Event()
+
+    def completion(granted, error):
+        granted_holder["value"] = bool(granted)
+        finished.set()
+
+    store.requestAccessForEntityType_completionHandler_(Contacts.CNEntityTypeContacts, completion)
+    finished.wait(timeout=10)
+    return granted_holder["value"]
 
 
 def _apple_ts_to_unix(apple_ns: int) -> float:
@@ -204,11 +235,10 @@ def _merge_threads(threads: list[dict]) -> list[dict]:
 
 
 def _fallback_summary(threads: list[dict]) -> str:
-    count = len(threads)
     needs_reply_count = sum(1 for thread in threads if thread["needs_reply"])
     if needs_reply_count:
-        return f"{count} active conversations in the last day, with {needs_reply_count} still nudging for a reply."
-    return f"{count} active conversations in the last day, mostly the usual swirl of logistics and check-ins."
+        return "Yesterday's conversations were mostly logistics and check-ins, with a couple of loose ends still waiting on you."
+    return "Yesterday's conversations were mostly the usual swirl of logistics, check-ins, and background social weather."
 
 
 def _summarize_threads(api_key: str | None, threads: list[dict]) -> str | None:
@@ -222,16 +252,19 @@ def _summarize_threads(api_key: str | None, threads: list[dict]) -> str | None:
         flags = []
         if thread["needs_reply"]:
             flags.append("needs reply")
+        if not thread.get("handle") and thread["name"] == "Unknown":
+            flags.append("ambiguous label")
         snippet = thread.get("snippet")
         snippet_text = f" snippet: {snippet}" if snippet else ""
         flag_text = f" ({', '.join(flags)})" if flags else ""
         lines.append(
-            f"- {thread['name']}: {thread['count']} messages, last {thread['last_time']}{flag_text}.{snippet_text}"
+            f"- {thread['name']}: last active {thread['last_time']}{flag_text}.{snippet_text}"
         )
 
     prompt = (
         "Summarize these message threads from the last 24 hours for a private personal morning email. "
-        "Keep it to one or two witty sentences. Prefer themes over exhaustive detail.\n\n"
+        "Keep it to one or two witty sentences. Prefer themes over exhaustive detail. "
+        "Use message counts only if they materially change the interpretation of the day.\n\n"
         + "\n".join(lines)
     )
     try:

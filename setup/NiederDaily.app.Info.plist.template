@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleDisplayName</key>
+    <string>NiederDaily</string>
+    <key>CFBundleExecutable</key>
+    <string>NiederDaily</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>CFBundleIdentifier</key>
+    <string>me.nieder.NiederDaily</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>NiederDaily</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSCalendarsUsageDescription</key>
+    <string>NiederDaily reads your calendar to build your morning digest.</string>
+    <key>NSContactsUsageDescription</key>
+    <string>NiederDaily reads your contacts to label recent conversations more clearly.</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>NiederDaily reads your photo library to include an On This Day memory.</string>
+    <key>NSRemindersUsageDescription</key>
+    <string>NiederDaily reads your reminders to include your tasks in the morning digest.</string>
+</dict>
+</plist>

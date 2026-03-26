@@ -74,8 +74,8 @@ def test_fallback_summary_mentions_reply_count():
         {"needs_reply": False},
         {"needs_reply": True},
     ])
-    assert "3 active conversations" in summary
-    assert "2 still nudging for a reply" in summary
+    assert "loose ends" in summary
+    assert "active conversations" not in summary
 
 
 def test_messages_block_returns_summary_dict(mocker, tmp_path):

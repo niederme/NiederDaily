@@ -7,8 +7,10 @@
     <string>me.nieder.daily</string>
     <key>ProgramArguments</key>
     <array>
-        <string>__PYTHON_PATH__</string>
-        <string>__SCRIPT_PATH__</string>
+        <string>/usr/bin/open</string>
+        <string>-g</string>
+        <string>-j</string>
+        <string>__APP_PATH__</string>
     </array>
     <key>StartCalendarInterval</key>
     <dict>
@@ -23,6 +25,8 @@
     <string>__LOG_DIR__/niederdaily.log</string>
     <key>EnvironmentVariables</key>
     <dict>
+        <key>NIEDERDAILY_MODE</key>
+        <string>run</string>
         <key>PATH</key>
         <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     </dict>

@@ -1,0 +1,69 @@
+import Foundation
+
+enum LauncherError: Error {
+    case badPath(String)
+}
+
+let repoDir = "__REPO_DIR__"
+let pythonPath = "__PYTHON_PATH__"
+let scriptPath = "__SCRIPT_PATH__"
+
+func ensureDir(_ path: String) throws {
+    try FileManager.default.createDirectory(atPath: path, withIntermediateDirectories: true)
+}
+
+func main() throws {
+    guard FileManager.default.fileExists(atPath: pythonPath) else {
+        throw LauncherError.badPath("Missing python at \(pythonPath)")
+    }
+    guard FileManager.default.fileExists(atPath: scriptPath) else {
+        throw LauncherError.badPath("Missing script at \(scriptPath)")
+    }
+
+    let home = FileManager.default.homeDirectoryForCurrentUser.path
+    let stateDir = "\(home)/.niederdaily"
+    let logDir = "\(stateDir)/logs"
+    let tmpDir = "\(stateDir)/tmp"
+    let logPath = "\(logDir)/niederdaily.log"
+
+    try ensureDir(stateDir)
+    try ensureDir(logDir)
+    try ensureDir(tmpDir)
+
+    if !FileManager.default.fileExists(atPath: logPath) {
+        FileManager.default.createFile(atPath: logPath, contents: Data())
+    }
+
+    let logHandle = try FileHandle(forWritingTo: URL(fileURLWithPath: logPath))
+    try logHandle.seekToEnd()
+    defer { try? logHandle.close() }
+
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: pythonPath)
+
+    var environment = ProcessInfo.processInfo.environment
+    environment["PATH"] = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+    environment["TMPDIR"] = tmpDir
+    environment["NIEDERDAILY_LAUNCHED_FROM_APP"] = "1"
+    let launchMode = environment["NIEDERDAILY_MODE"] ?? "prompt"
+    if launchMode == "run" {
+        process.arguments = [scriptPath]
+    } else {
+        process.arguments = [scriptPath, "--preflight"]
+    }
+    process.environment = environment
+    process.currentDirectoryURL = URL(fileURLWithPath: repoDir)
+    process.standardOutput = logHandle
+    process.standardError = logHandle
+
+    try process.run()
+    process.waitUntilExit()
+    exit(process.terminationStatus)
+}
+
+do {
+    try main()
+} catch {
+    fputs("NiederDaily launcher error: \(error)\n", stderr)
+    exit(1)
+}

@@ -19,7 +19,7 @@ from modules.weather import weather_block
 from modules.calendar import calendar_block, calendar_access_granted
 from modules.welcome import welcome_block
 from modules.reminders import reminders_block, reminders_access_granted
-from modules.messages import messages_block
+from modules.messages import messages_block, contacts_access_granted
 from modules.photo import photo_access_granted, photo_block
 from modules.nyt import nyt_block
 from renderer import render_email
@@ -150,24 +150,14 @@ def preflight():
     )
 
     # Address Book / Contacts
-    try:
-        import AddressBook
-        book = AddressBook.ABAddressBook.sharedAddressBook()
-        report(
-            "Contacts",
-            bool(book),
-            " (Address Book accessible)",
-            "Address Book returned None — grant Contacts access in System Settings. Message senders will fall back to raw handles until access is granted.",
-            blocking=False,
-        )
-    except Exception as e:
-        report(
-            "Contacts",
-            False,
-            "",
-            f"{e}. Message senders will fall back to raw handles until access is granted.",
-            blocking=False,
-        )
+    contacts_ready = contacts_access_granted(prompt=True)
+    report(
+        "Contacts",
+        contacts_ready,
+        " (Contacts accessible)",
+        "unavailable — grant Contacts access in System Settings → Privacy & Security → Contacts. Message senders will fall back to raw handles until access is granted.",
+        blocking=False,
+    )
 
     # Gmail OAuth
     from pathlib import Path as P2
