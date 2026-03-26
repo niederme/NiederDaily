@@ -34,7 +34,7 @@ a{color:#121212;}
 .module-place{font-size:20px;font-weight:700;line-height:1.15;letter-spacing:-0.02em;color:#121212;margin-bottom:12px;}
 .weather-card{padding:20px 22px 18px;border:1px solid rgba(214,208,198,0.9);border-radius:18px;background:#ffffff;}
 .display-line{font-size:58px;font-weight:300;line-height:0.94;letter-spacing:-0.03em;color:#121212;display:flex;align-items:center;gap:18px;flex-wrap:wrap;}
-.weather-icon{display:inline-flex;align-items:center;justify-content:center;width:84px;height:84px;color:#474a51;flex-shrink:0;}
+.weather-icon{display:inline-block;width:56px;height:56px;vertical-align:middle;flex-shrink:0;line-height:0;}
 .weather-icon svg{width:56px;height:56px;}
 .weather-summary{font-size:14px;line-height:1.45;color:#474a51;margin-top:8px;}
 .weather-meta{font-size:12px;line-height:1.45;color:#6d7178;margin-top:4px;}
@@ -125,57 +125,88 @@ def _linked_text(item_type: str, text: str, payload: dict) -> str:
 def _row_link(item_type: str, time_html: str, main_html: str, payload: dict) -> str:
     href = _shortcut_url(item_type, payload)
     if not href:
-        return f'<div class="item-row">{time_html}{main_html}</div>'
+        return f'<div style="display:flex;gap:18px;align-items:baseline;width:100%;">{time_html}{main_html}</div>'
     return f'<a class="item-row-link" href="{_esc(href)}">{time_html}{main_html}</a>'
+
+
+def _render_sf_symbol(name: str, hex_color: str, size: int = 56) -> str | None:
+    try:
+        from AppKit import (NSImage, NSImageSymbolConfiguration, NSColor,
+                            NSBitmapImageRep, NSGraphicsContext)
+        from Foundation import NSMakeRect, NSMakeSize
+        import base64
+        r = int(hex_color[1:3], 16) / 255
+        g = int(hex_color[3:5], 16) / 255
+        b = int(hex_color[5:7], 16) / 255
+        color = NSColor.colorWithSRGBRed_green_blue_alpha_(r, g, b, 1.0)
+        cfg = NSImageSymbolConfiguration.configurationWithPaletteColors_([color, color, color])
+        img = NSImage.imageWithSystemSymbolName_accessibilityDescription_(name, None)
+        if img is None:
+            return None
+        img = img.imageWithSymbolConfiguration_(cfg)
+        img.setSize_(NSMakeSize(size, size))
+        px = size * 2
+        bmp = NSBitmapImageRep.alloc().initWithBitmapDataPlanes_pixelsWide_pixelsHigh_bitsPerSample_samplesPerPixel_hasAlpha_isPlanar_colorSpaceName_bytesPerRow_bitsPerPixel_(
+            None, px, px, 8, 4, True, False, "NSCalibratedRGBColorSpace", 0, 0)
+        ctx = NSGraphicsContext.graphicsContextWithBitmapImageRep_(bmp)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.setCurrentContext_(ctx)
+        img.drawInRect_(NSMakeRect(0, 0, px, px))
+        NSGraphicsContext.restoreGraphicsState()
+        png_data = bmp.representationUsingType_properties_(4, None)
+        b64 = base64.b64encode(bytes(png_data)).decode()
+        return f'<img src="data:image/png;base64,{b64}" width="{size}" height="{size}" alt="" style="display:inline-block;vertical-align:middle;">'
+    except Exception:
+        return None
+
+
+# Maps condition label (lowercased keyword) → (sf_symbol_name, hex_color)
+_SF_SYMBOL_MAP = [
+    ("thunder",         "cloud.bolt.rain.fill",     ACCENT),
+    ("blizzard",        "wind.snow",                MUTED),
+    ("snow",            "cloud.snow.fill",           MUTED),
+    ("flurr",           "cloud.snow.fill",           MUTED),
+    ("sleet",           "cloud.sleet.fill",          MUTED),
+    ("wintry",          "cloud.sleet.fill",          MUTED),
+    ("freezing",        "cloud.sleet.fill",          MUTED),
+    ("hail",            "cloud.hail.fill",           MUTED),
+    ("heavy rain",      "cloud.heavyrain.fill",      ACCENT),
+    ("rain",            "cloud.rain.fill",           ACCENT),
+    ("drizzle",         "cloud.drizzle.fill",        ACCENT),
+    ("shower",          "cloud.sun.rain.fill",       ACCENT),
+    ("fog",             "cloud.fog.fill",            MUTED),
+    ("haz",             "sun.haze.fill",             MUTED),
+    ("smok",            "smoke.fill",                MUTED),
+    ("dust",            "sun.dust.fill",             MUTED),
+    ("wind",            "wind",                      MUTED),
+    ("breezy",          "wind",                      MUTED),
+    ("mostly clear",    "moon.haze.fill",            ACCENT),
+    ("clear",           "sun.max.fill",              ACCENT),
+    ("sun shower",      "cloud.sun.rain.fill",       ACCENT),
+    ("sun",             "sun.max.fill",              ACCENT),
+    ("partly",          "cloud.sun.fill",            MUTED),
+    ("mostly cloudy",   "cloud.fill",                MUTED),
+    ("cloudy",          "cloud.fill",                MUTED),
+    ("frigid",          "thermometer.snowflake",     MUTED),
+    ("hot",             "thermometer.sun.fill",      ACCENT),
+    ("hurricane",       "hurricane",                 ACCENT),
+    ("tropical",        "tropicalstorm",             ACCENT),
+]
 
 
 def _weather_icon(condition: str) -> str:
     c = condition.lower()
-    stroke = MUTED
-    if "thunder" in c:
-        return (
-            f'<span class="weather-icon" aria-hidden="true">'
-            f'<svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">'
-            f'<path d="M10 14.5C10 10.9101 12.9101 8 16.5 8C19.2451 8 21.5927 9.70662 22.5287 12.1172C22.8455 12.0398 23.1765 12 23.5167 12C25.9921 12 28 14.0079 28 16.4833C28 18.9588 25.9921 20.9667 23.5167 20.9667H12.5C9.46243 20.9667 7 18.5042 7 15.4667C7 12.4291 9.46243 9.96667 12.5 9.96667" stroke="{stroke}" stroke-width="1.8" stroke-linecap="round"/>'
-            f'<path d="M17.5 16.5L14 22.5H17.8L15.8 27L21.5 19.8H17.8L20 16.5" stroke="{ACCENT}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>'
-            f'</svg></span>'
-        )
-    if "snow" in c or "ice" in c:
-        return (
-            f'<span class="weather-icon" aria-hidden="true">'
-            f'<svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">'
-            f'<path d="M11 14.5C11 10.9101 13.9101 8 17.5 8C20.2451 8 22.5927 9.70662 23.5287 12.1172C23.8455 12.0398 24.1765 12 24.5167 12C26.9921 12 29 14.0079 29 16.4833C29 18.9588 26.9921 20.9667 24.5167 20.9667H13.5C10.4624 20.9667 8 18.5042 8 15.4667C8 12.4291 10.4624 9.96667 13.5 9.96667" stroke="{stroke}" stroke-width="1.8" stroke-linecap="round"/>'
-            f'<path d="M13.5 24.5H20.5M17 21V28M14.5 22.5L19.5 26.5M19.5 22.5L14.5 26.5" stroke="{stroke}" stroke-width="1.6" stroke-linecap="round"/>'
-            f'</svg></span>'
-        )
-    if "rain" in c or "drizzle" in c or "shower" in c:
-        return (
-            f'<span class="weather-icon" aria-hidden="true">'
-            f'<svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">'
-            f'<path d="M10 14.5C10 10.9101 12.9101 8 16.5 8C19.2451 8 21.5927 9.70662 22.5287 12.1172C22.8455 12.0398 23.1765 12 23.5167 12C25.9921 12 28 14.0079 28 16.4833C28 18.9588 25.9921 20.9667 23.5167 20.9667H12.5C9.46243 20.9667 7 18.5042 7 15.4667C7 12.4291 9.46243 9.96667 12.5 9.96667" stroke="{stroke}" stroke-width="1.8" stroke-linecap="round"/>'
-            f'<path d="M14 23.5L12.8 26.5M18 23.5L16.8 26.5M22 23.5L20.8 26.5" stroke="{ACCENT}" stroke-width="1.8" stroke-linecap="round"/>'
-            f'</svg></span>'
-        )
-    if "clear" in c or "sun" in c:
-        return (
-            f'<span class="weather-icon" aria-hidden="true">'
-            f'<svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">'
-            f'<circle cx="17" cy="17" r="5.5" stroke="{ACCENT}" stroke-width="1.8"/>'
-            f'<path d="M17 6V9M17 25V28M28 17H25M9 17H6M24.8 9.2L22.6 11.4M11.4 22.6L9.2 24.8M24.8 24.8L22.6 22.6M11.4 11.4L9.2 9.2" stroke="{ACCENT}" stroke-width="1.8" stroke-linecap="round"/>'
-            f'</svg></span>'
-        )
-    if "fog" in c:
-        return (
-            f'<span class="weather-icon" aria-hidden="true">'
-            f'<svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">'
-            f'<path d="M10 13.5C10 10.4624 12.4624 8 15.5 8C17.8246 8 19.8128 9.44544 20.6058 11.4869C20.8742 11.4214 21.1547 11.3878 21.4433 11.3878C23.5424 11.3878 25.244 13.0894 25.244 15.1884C25.244 17.2875 23.5424 18.9891 21.4433 18.9891H12.1111C9.8406 18.9891 8 17.1485 8 14.878C8 12.6075 9.8406 10.7669 12.1111 10.7669" stroke="{stroke}" stroke-width="1.8" stroke-linecap="round"/>'
-            f'<path d="M10 23.5H24M8 26.5H22" stroke="{stroke}" stroke-width="1.8" stroke-linecap="round"/>'
-            f'</svg></span>'
-        )
+    for keyword, symbol, color in _SF_SYMBOL_MAP:
+        if keyword in c:
+            img = _render_sf_symbol(symbol, color)
+            if img:
+                return f'<span class="weather-icon" aria-hidden="true">{img}</span>'
+            break
+    # fallback: plain cloud SVG
     return (
         f'<span class="weather-icon" aria-hidden="true">'
-        f'<svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">'
-        f'<path d="M10 14.5C10 10.9101 12.9101 8 16.5 8C19.2451 8 21.5927 9.70662 22.5287 12.1172C22.8455 12.0398 23.1765 12 23.5167 12C25.9921 12 28 14.0079 28 16.4833C28 18.9588 25.9921 20.9667 23.5167 20.9667H12.5C9.46243 20.9667 7 18.5042 7 15.4667C7 12.4291 9.46243 9.96667 12.5 9.96667" stroke="{stroke}" stroke-width="1.8" stroke-linecap="round"/>'
+        f'<svg width="56" height="56" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">'
+        f'<path d="M10 14.5C10 10.9101 12.9101 8 16.5 8C19.2451 8 21.5927 9.70662 22.5287 12.1172C22.8455 12.0398 23.1765 12 23.5167 12C25.9921 12 28 14.0079 28 16.4833C28 18.9588 25.9921 20.9667 23.5167 20.9667H12.5C9.46243 20.9667 7 18.5042 7 15.4667C7 12.4291 9.46243 9.96667 12.5 9.96667" stroke="{MUTED}" stroke-width="1.8" stroke-linecap="round"/>'
         f'</svg></span>'
     )
 
@@ -213,9 +244,10 @@ def _weather_html(data: dict) -> str:
             f'<div class="module-place">{_esc(loc["location"])}</div>'
             f'<div class="display-line">'
             f'{_weather_icon(loc["condition"])}'
-            f'<span>{loc["temp"]}°</span></div>'
+            f'<span>{loc["high"]}° / {loc["low"]}°</span></div>'
+            f'<div style="font-size:13px;color:{MUTED};margin-top:2px;">Currently {loc["temp"]}°</div>'
             f'{sentence_html}'
-            f'<div class="weather-meta">High {loc["high"]}° · Low {loc["low"]}° · Sunrise {_esc(loc["sunrise"])} · Sunset {_esc(loc["sunset"])}</div>'
+            f'<div class="weather-meta">Sunrise {_esc(loc["sunrise"])} · Sunset {_esc(loc["sunset"])}</div>'
             f'{alert_html}'
             f'{attribution_html}'
             f'</div>'
@@ -328,32 +360,32 @@ def _photo_html(photo: tuple, *, show_rule: bool = True) -> str:
     _, meta = photo
     raw_date = meta.get("date")
     try:
-        pretty_date = date.fromisoformat(raw_date).strftime("%B %-d, %Y")
+        d = date.fromisoformat(raw_date)
+        pretty_date = d.strftime("%B %-d, %Y")
+        year = str(d.year)
     except Exception:
         pretty_date = raw_date or "Today"
+        year = ""
+
+    heading = f"On This Day · {year}" if year else "On This Day"
 
     meta_bits = [_esc(pretty_date)]
     if meta.get("location"):
         meta_bits.append(_esc(meta["location"]))
-    if meta.get("is_favorite"):
-        meta_bits.append("Favorite")
     meta_line = " · ".join(meta_bits)
     description = meta.get("description")
     description_html = f'<div class="photo-description">{_esc(description)}</div>' if description else ""
-
-    keywords = meta.get("keywords") or []
-    keywords_html = (f'<div class="photo-meta">Keywords: {_esc(", ".join(keywords))}</div>'
-                     if keywords else "")
-    meta_html = f'<div class="photo-meta">{meta_line}</div>'
     body = (
         '<div class="photo-module">'
         '<div class="photo-frame"><img src="cid:onthisday" alt="On This Day photo"></div>'
+        f'<div style="margin-top:10px;">'
+        f'<div style="{SECTION_LABEL_STYLE}">{_esc(heading)}</div>'
         f'{description_html}'
-        f'{meta_html}'
-        f'{keywords_html}'
+        f'<div class="photo-meta">{meta_line}</div>'
+        f'</div>'
         '</div>'
     )
-    return _section("On This Day", body, show_rule=show_rule)
+    return _section(None, body, show_rule=show_rule)
 
 
 def render_email(
@@ -426,7 +458,7 @@ def render_email(
         img_ext = "jpg" if img_fmt in ("jpeg", "jpg") else img_fmt
         img_part = MIMEImage(img_bytes, _subtype=img_fmt)
         img_part.add_header("Content-ID", "<onthisday>")
-        img_part.add_header("Content-Disposition", "inline", filename=f"onthisday.{img_ext}")
+        img_part.add_header("Content-Disposition", "inline")
         msg.attach(img_part)
 
     return msg

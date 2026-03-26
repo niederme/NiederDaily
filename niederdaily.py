@@ -53,7 +53,7 @@ def run(config_path: str = None):
     # Steps 4-7: independent modules
     reminders = _safe(reminders_block, conf.get("reminders_lists", []))
     messages  = _safe(messages_block, conf["anthropic_api_key"])
-    photo     = _safe(photo_block)
+    photo     = _safe(photo_block, conf["anthropic_api_key"])
     nyt       = _safe(nyt_block, conf.get("nyt_api_key"))
 
     msg = render_email(

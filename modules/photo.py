@@ -360,7 +360,7 @@ def _applescript_photo_block() -> tuple | None:
     try:
         result = subprocess.run(
             ["osascript", "-e", script],
-            capture_output=True, text=True, timeout=30
+            capture_output=True, text=True, timeout=120
         )
         if result.returncode != 0:
             log.warning("Photos list AppleScript failed: %s", result.stderr.strip() or result.stdout.strip() or f"exit {result.returncode}")
@@ -431,14 +431,14 @@ def _applescript_photo_block() -> tuple | None:
         return None
 
 
-def _haiku_describe(img_bytes: bytes, img_fmt: str) -> str | None:
+def _haiku_describe(img_bytes: bytes, img_fmt: str, api_key: str | None = None) -> str | None:
     """Return a one-sentence AI description of the photo, or None on failure."""
     try:
         import anthropic
         mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "heic": "image/jpeg",
                 "png": "image/png", "gif": "image/gif", "webp": "image/webp"}.get(img_fmt.lower(), "image/jpeg")
         b64 = base64.standard_b64encode(img_bytes).decode()
-        client = anthropic.Anthropic()
+        client = anthropic.Anthropic(api_key=api_key) if api_key else anthropic.Anthropic()
         msg = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=100,
@@ -446,7 +446,7 @@ def _haiku_describe(img_bytes: bytes, img_fmt: str) -> str | None:
                 "role": "user",
                 "content": [
                     {"type": "image", "source": {"type": "base64", "media_type": mime, "data": b64}},
-                    {"type": "text", "text": "Describe this photo in one short sentence. Be specific and evocative. No preamble."},
+                    {"type": "text", "text": "Write one short, clever caption for this photo — something that captures the feeling or moment, not just what you see. Witty, warm, or poetic. No preamble, no quotes."},
                 ],
             }],
         )
@@ -456,11 +456,30 @@ def _haiku_describe(img_bytes: bytes, img_fmt: str) -> str | None:
         return None
 
 
-def photo_block() -> tuple | None:
+def _resize_for_email(img_bytes: bytes, img_fmt: str, max_px: int = 1200) -> tuple[bytes, str]:
+    """Downscale to max_px on the long edge and re-encode as JPEG. Returns (bytes, fmt)."""
+    try:
+        from PIL import Image
+        import io
+        img = Image.open(io.BytesIO(img_bytes))
+        w, h = img.size
+        if max(w, h) > max_px:
+            scale = max_px / max(w, h)
+            img = img.resize((round(w * scale), round(h * scale)), Image.LANCZOS)
+        buf = io.BytesIO()
+        rgb = img.convert("RGB")
+        rgb.save(buf, format="JPEG", quality=85, optimize=True)
+        return buf.getvalue(), "jpeg"
+    except Exception:
+        return img_bytes, img_fmt
+
+
+def photo_block(api_key: str | None = None) -> tuple | None:
     result = _native_photo_block() or _applescript_photo_block()
     if result is None:
         return None
     img_bytes, meta = result
+    img_bytes, meta["format"] = _resize_for_email(img_bytes, meta.get("format", "jpeg"))
     if not meta.get("description"):
-        meta["description"] = _haiku_describe(img_bytes, meta.get("format", "jpeg"))
+        meta["description"] = _haiku_describe(img_bytes, meta.get("format", "jpeg"), api_key=api_key)
     return (img_bytes, meta)

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import jwt
 import time
 import requests
@@ -64,9 +66,9 @@ def _make_jwt(config: dict) -> str:
 
 
 def _fmt_time(iso: str) -> str:
-    """Convert RFC 3339 timestamp (e.g. '2026-03-25T06:52:00-05:00') to '6:52am'."""
+    """Convert RFC 3339 timestamp (e.g. '2026-03-25T06:52:00Z') to '6:52am'."""
     try:
-        dt = datetime.fromisoformat(iso)
+        dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
         return dt.strftime("%-I:%M%p").lower()
     except Exception:
         return iso
@@ -94,7 +96,7 @@ def fetch_weather(lat: float, lon: float, name: str, config: dict) -> dict | Non
             f"{WEATHERKIT_URL}/{lat}/{lon}",
             params={
                 "dataSets": "currentWeather,forecastDaily,weatherAlerts",
-                "unitSystem": "imperial",
+                "unitSystem": "i",
                 "countryCode": "US",
             },
             headers={"Authorization": f"Bearer {token}"},
@@ -108,12 +110,15 @@ def fetch_weather(lat: float, lon: float, name: str, config: dict) -> dict | Non
         today = data["forecastDaily"]["days"][0]
         alerts_raw = data.get("weatherAlerts", {}).get("alerts", [])
 
+        def c_to_f(c: float) -> int:
+            return round(c * 9 / 5 + 32)
+
         return {
             "location": name,
-            "temp": round(current["temperature"]),
+            "temp": c_to_f(current["temperature"]),
             "condition": CONDITION_LABELS.get(code, "Unknown"),
-            "high": round(today["temperatureMax"]),
-            "low": round(today["temperatureMin"]),
+            "high": c_to_f(today["temperatureMax"]),
+            "low": c_to_f(today["temperatureMin"]),
             "sunrise": _fmt_time(today["sunrise"]),
             "sunset": _fmt_time(today["sunset"]),
             "alerts": [_parse_alert(a) for a in alerts_raw],
