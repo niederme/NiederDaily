@@ -6,7 +6,7 @@ from renderer import render_email
 
 WEATHER = {"locations": [{"location": "Warwick, NY", "temp": 54, "condition": "Overcast", "high": 61, "low": 44, "sunrise": "6:52am", "sunset": "7:31pm", "summary": "Overcast today, with gusts up to 28 mph this afternoon. Warmer tomorrow, with a high of 70°."}], "travel_city": None}
 CALENDAR = [{"time": "9:00am", "title": "Weekly sync", "location": "Zoom", "calendar": "Personal", "calendar_color": "#0088FF", "all_day": False}]
-REMINDERS = {"overdue": [{"title": "Call accountant", "due": "2026-03-20"}], "today": [], "upcoming": []}
+REMINDERS = {"overdue": [{"title": "Call accountant", "due": "2026-03-20", "list": "House Wish List", "list_color": "#0088FF"}], "today": [], "upcoming": []}
 MESSAGES = [{"name": "Mom", "handle": "+15555550101", "is_contact": True, "count": 4, "last_time": "8:14pm", "needs_reply": True}]
 PHOTO = (b'\xff\xd8\xff' + b'\x00' * 100, {"year": "2019", "date": "2019-03-25", "location": "Warwick, NY", "is_favorite": True})
 NYT = [{"title": "Story One", "abstract": "Things happened.", "byline": "By Reporter One", "url": "https://nytimes.com/1", "thumbnail": None}]
@@ -116,6 +116,17 @@ def test_render_reminders_only_show_first_upcoming_day():
     assert "Call mom" in html
     assert "Pick up Rx" in html
     assert "UMAC uniforms" not in html
+
+
+def test_render_reminders_include_list_label_and_color():
+    msg = render_email(
+        recipient="me@example.com", welcome=None,
+        weather=None, calendar=None, reminders=REMINDERS, messages=None, photo=None, nyt=None
+    )
+    html_part = next(p for p in msg.get_payload() if p.get_content_type() == "text/html")
+    html = html_part.get_payload(decode=True).decode()
+    assert "House Wish List" in html
+    assert "#0088FF" in html
 
 
 def test_render_nyt_without_thumbnail_has_no_placeholder_block():

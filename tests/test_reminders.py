@@ -28,6 +28,8 @@ def _make_reminder(title, due):
         reminder.dueDateComponents.return_value = None
     else:
         reminder.dueDateComponents.return_value = _FakeComponents(due.year, due.month, due.day)
+    reminder.calendar.return_value.title.return_value = "House Wish List"
+    reminder.calendar.return_value.colorStringRaw.return_value = "#0088FFFF"
     return reminder
 
 
@@ -70,7 +72,12 @@ def test_today_items(mocker):
     result = reminders.reminders_block([])
 
     assert result is not None
-    assert result["today"] == [{"title": "Today task", "due": today.isoformat()}]
+    assert result["today"] == [{
+        "title": "Today task",
+        "due": today.isoformat(),
+        "list": "House Wish List",
+        "list_color": "#0088FF",
+    }]
     assert result["overdue"] == []
     assert result["upcoming"] == []
 

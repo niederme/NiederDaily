@@ -202,11 +202,19 @@ def _calendar_html(events: list, *, show_rule: bool = True) -> str:
 
 
 def _reminders_html(data: dict, *, show_rule: bool = True) -> str:
+    def reminder_meta(item: dict) -> str:
+        if not item.get("list"):
+            return ""
+        dot = ""
+        if item.get("list_color"):
+            dot = f'<span class="calendar-dot" style="background:{_esc(item["list_color"])};"></span>'
+        return f'<span class="list-meta"><span class="calendar-source">{dot}{_esc(item["list"])}</span></span>'
+
     rows = []
     for r in data.get("overdue", []):
-        rows.append(f'<div class="list-row"><span class="list-time">{BADGE_OVERDUE}</span><div class="list-main">{_esc(r["title"])}</div></div>')
+        rows.append(f'<div class="list-row"><span class="list-time">{BADGE_OVERDUE}</span><div class="list-main">{_esc(r["title"])}{reminder_meta(r)}</div></div>')
     for r in data.get("today", []):
-        rows.append(f'<div class="list-row"><span class="list-time">{BADGE_TODAY}</span><div class="list-main">{_esc(r["title"])}</div></div>')
+        rows.append(f'<div class="list-row"><span class="list-time">{BADGE_TODAY}</span><div class="list-main">{_esc(r["title"])}{reminder_meta(r)}</div></div>')
     next_day = None
     for r in data.get("upcoming", []):
         due_raw = r.get("due")
@@ -220,7 +228,7 @@ def _reminders_html(data: dict, *, show_rule: bool = True) -> str:
         except Exception:
             due = due_raw
         badge = f'<span style="display:inline-block;min-width:56px;color:{MUTED};font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">{due}</span>'
-        rows.append(f'<div class="list-row"><span class="list-time">{badge}</span><div class="list-main">{_esc(r["title"])}</div></div>')
+        rows.append(f'<div class="list-row"><span class="list-time">{badge}</span><div class="list-main">{_esc(r["title"])}{reminder_meta(r)}</div></div>')
     if not rows:
         return _section("Reminders", '<div class="supporting">All clear.</div>', show_rule=show_rule)
     return _section("Reminders", "".join(rows), show_rule=show_rule)
@@ -253,7 +261,7 @@ def _nyt_html(stories: list, *, show_rule: bool = True) -> str:
             f'<a href="{_esc(s["url"])}" style="color:{INK};text-decoration:none;">{_esc(s["title"])}</a></div>'
             f'<div class="nytdek">{_esc(s["abstract"])}</div>{byline}</div>{img}</div>'
         )
-    return _section("In the News", "".join(rows), show_rule=show_rule)
+    return _section("New York Times Most Popular", "".join(rows), show_rule=show_rule)
 
 
 def render_email(

@@ -109,6 +109,37 @@ def _due_date_string(reminder) -> str | None:
     return f"{year:04d}-{month:02d}-{day:02d}"
 
 
+def _list_name(reminder) -> str | None:
+    try:
+        calendar = reminder.calendar()
+        if calendar is None:
+            return None
+        title = calendar.title()
+        return title.strip() if title else None
+    except Exception:
+        return None
+
+
+def _list_color(reminder) -> str | None:
+    try:
+        calendar = reminder.calendar()
+        if calendar is None:
+            return None
+        for attr in ("colorStringRaw", "colorString"):
+            value = getattr(calendar, attr, None)
+            if value is None:
+                continue
+            color = value() if callable(value) else value
+            if isinstance(color, str) and color.startswith("#"):
+                if len(color) == 9:
+                    return color[:7]
+                if len(color) in {4, 7}:
+                    return color
+    except Exception:
+        return None
+    return None
+
+
 def reminders_block(lists: list | None = None) -> dict | None:
     if EventKit is None or not _has_reminders_access():
         return None
@@ -142,7 +173,12 @@ def reminders_block(lists: list | None = None) -> dict | None:
             except ValueError:
                 continue
 
-            item = {"title": title, "due": due_str}
+            item = {
+                "title": title,
+                "due": due_str,
+                "list": _list_name(reminder),
+                "list_color": _list_color(reminder),
+            }
             if due < today:
                 overdue.append(item)
             elif due == today:
