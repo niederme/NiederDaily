@@ -5,7 +5,7 @@ from pathlib import Path
 from renderer import render_email
 
 WEATHER = {"locations": [{"location": "Warwick, NY", "temp": 54, "condition": "Overcast", "high": 61, "low": 44, "sunrise": "6:52am", "sunset": "7:31pm", "summary": "Overcast today, with gusts up to 28 mph this afternoon. Warmer tomorrow, with a high of 70°."}], "travel_city": None}
-CALENDAR = [{"time": "9:00am", "title": "Weekly sync", "location": "", "all_day": False}]
+CALENDAR = [{"time": "9:00am", "title": "Weekly sync", "location": "Zoom", "calendar": "Personal", "calendar_color": "#0088FF", "all_day": False}]
 REMINDERS = {"overdue": [{"title": "Call accountant", "due": "2026-03-20"}], "today": [], "upcoming": []}
 MESSAGES = [{"name": "Mom", "handle": "+15555550101", "is_contact": True, "count": 4, "last_time": "8:14pm", "needs_reply": True}]
 PHOTO = (b'\xff\xd8\xff' + b'\x00' * 100, {"year": "2019", "date": "2019-03-25", "location": "Warwick, NY", "is_favorite": True})
@@ -55,6 +55,8 @@ def test_render_omits_rule_between_weather_card_and_next_section():
     html = html_part.get_payload(decode=True).decode()
     assert html.count('class="section-rule"') == 0
     assert "Calendar" in html
+    assert "Personal" in html
+    assert "#0088FF" in html
 
 def test_render_includes_photo_attachment():
     msg = render_email(

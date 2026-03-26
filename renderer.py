@@ -42,6 +42,9 @@ a{color:#121212;}
 .list-time{min-width:56px;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#474a51;}
 .list-main{flex:1;font-size:15px;line-height:1.35;color:#121212;}
 .list-meta{display:block;font-size:12px;line-height:1.4;color:#474a51;margin-top:4px;}
+.meta-sep{color:#9aa0a6;margin:0 6px;}
+.calendar-source{display:inline-flex;align-items:center;gap:6px;color:#6d7178;white-space:nowrap;}
+.calendar-dot{display:inline-block;width:8px;height:8px;border-radius:999px;flex-shrink:0;}
 .msgrow{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:0 0 14px;margin:0 0 14px;border-bottom:1px solid rgba(214,208,198,0.55);}
 .msgrow:last-child{padding-bottom:0;margin-bottom:0;border-bottom:0;}
 .msgname{font-size:16px;font-weight:700;color:#121212;line-height:1.2;}
@@ -146,7 +149,18 @@ def _calendar_html(events: list, *, show_rule: bool = True) -> str:
     rows = []
     for e in events:
         time_str = _esc(e.get("time") or "All day")
-        loc = (f'<span class="list-meta">{_esc(e["location"])}</span>' if e.get("location") else "")
+        meta_parts = []
+        if e.get("location"):
+            meta_parts.append(_esc(e["location"]))
+        if e.get("calendar"):
+            dot = ""
+            if e.get("calendar_color"):
+                dot = f'<span class="calendar-dot" style="background:{_esc(e["calendar_color"])};"></span>'
+            meta_parts.append(f'<span class="calendar-source">{dot}{_esc(e["calendar"])}</span>')
+        loc = ""
+        if meta_parts:
+            meta_sep = '<span class="meta-sep">·</span>'
+            loc = f'<span class="list-meta">{meta_sep.join(meta_parts)}</span>'
         rows.append(
             f'<div class="list-row">'
             f'<span class="list-time">{time_str}</span>'

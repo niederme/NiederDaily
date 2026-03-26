@@ -102,6 +102,24 @@ def _calendar_name(event) -> str | None:
         return None
 
 
+def _calendar_color(event) -> str | None:
+    try:
+        calendar = event.calendar()
+        if calendar is None:
+            return None
+
+        for attr in ("colorStringRaw", "colorString"):
+            value = getattr(calendar, attr, None)
+            if value is None:
+                continue
+            color = value() if callable(value) else value
+            if isinstance(color, str) and color.startswith("#") and len(color) in {4, 7, 9}:
+                return color
+    except Exception:
+        return None
+    return None
+
+
 def _time_sort_key(event):
     t = event.get("time") or ""
     try:
@@ -149,6 +167,7 @@ def calendar_block(calendars: list | None = None) -> list | None:
                 "title": title,
                 "location": location,
                 "calendar": _calendar_name(event),
+                "calendar_color": _calendar_color(event),
                 "all_day": time_val is None,
             })
 
