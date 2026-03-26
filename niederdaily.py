@@ -15,7 +15,7 @@ logging.basicConfig(
 )
 
 import config as cfg
-from modules.weather import weather_block
+from modules.weather import weather_block, weather_sentence
 from modules.calendar import calendar_block
 from modules.welcome import welcome_block
 from modules.reminders import reminders_block
@@ -40,6 +40,11 @@ def run(config_path: str = None):
     # Re-run weather with calendar events for travel detection
     if calendar:
         weather = _safe(weather_block, conf, calendar_events=calendar)
+
+    # Generate Haiku sentence once, for home location only
+    if weather and weather.get("locations"):
+        home = weather["locations"][0]
+        home["sentence"] = weather_sentence(home, conf["anthropic_api_key"])
 
     # Step 3: welcome needs weather + calendar
     welcome = _safe(welcome_block, conf["anthropic_api_key"],
@@ -156,16 +161,22 @@ def preflight():
             print(f"✗ Gmail OAuth: {e}")
             ok = False
 
-    # Open-Meteo
+    # WeatherKit
     import requests
     try:
-        r = requests.get("https://api.open-meteo.com/v1/forecast",
-            params={"latitude": 41.25, "longitude": -74.36, "current": "temperature_2m",
-                    "forecast_days": 1}, timeout=10)
+        from modules.weather import _make_jwt
+        token = _make_jwt(conf)
+        lat = conf["default_location"]["lat"]
+        lon = conf["default_location"]["lon"]
+        r = requests.get(
+            f"https://weatherkit.apple.com/api/v1/availability/{lat}/{lon}",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=10,
+        )
         r.raise_for_status()
-        print("✓ Open-Meteo")
+        print("✓ WeatherKit")
     except Exception as e:
-        print(f"✗ Open-Meteo: {e}")
+        print(f"✗ WeatherKit: {e}. The newsletter will skip the weather section until this recovers.")
         ok = False
 
     # Claude Haiku
