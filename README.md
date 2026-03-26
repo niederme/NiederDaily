@@ -53,6 +53,7 @@ Python dependencies live in [`requirements.txt`](/Users/niederme/~Repos/NiederDa
 - `google-api-python-client`
 - `requests`
 - `pyobjc-framework-AddressBook`
+- `pyobjc-framework-Contacts`
 - `pyobjc-framework-EventKit`
 - `pyobjc-framework-Photos`
 
@@ -142,7 +143,16 @@ Grant that app access in macOS Privacy & Security for:
 - Calendars
 - Reminders
 - Photos
+- Contacts
 - Full Disk Access if you want Messages access in the scheduled runtime
+
+Opening the app manually:
+
+```bash
+open -gj ~/Applications/NiederDaily.app
+```
+
+will run preflight/prompt mode so macOS can present missing permission dialogs without sending an email.
 
 ## Running
 
@@ -165,7 +175,13 @@ The repo includes:
 - a launch agent template at [`setup/me.nieder.daily.plist.template`](/Users/niederme/~Repos/NiederDaily/setup/me.nieder.daily.plist.template)
 - an app builder at [`setup/build_niederdaily_app.sh`](/Users/niederme/~Repos/NiederDaily/setup/build_niederdaily_app.sh)
 
-The launch agent is intended to open `~/Applications/NiederDaily.app`, not to run raw Python directly.
+The launch agent is intended to run the app wrapper executable directly:
+
+```bash
+~/Applications/NiederDaily.app/Contents/MacOS/NiederDaily --run
+```
+
+Manual app opens are for preflight and permission prompts; scheduled launches pass `--run` for the real send path.
 
 On newer macOS versions, prefer `bootstrap`/`bootout` over `launchctl load`:
 
