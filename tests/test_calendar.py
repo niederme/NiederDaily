@@ -1,41 +1,88 @@
-import pytest
+import types
 from unittest.mock import MagicMock
 
-from modules.calendar import calendar_block
+import modules.calendar as calendar
 
-APPLESCRIPT_OUTPUT = """9:00am|Weekly sync|Zoom
-12:00pm|Lunch with Sarah|The Landmark Inn
-|Phil's birthday|
-"""
+
+class _FakeNSDate:
+    def __init__(self, ts):
+        self._ts = ts
+
+    def timeIntervalSince1970(self):
+        return self._ts
+
+
+def _make_event(title, ts, location="", all_day=False):
+    event = MagicMock()
+    event.title.return_value = title
+    event.location.return_value = location
+    event.isAllDay.return_value = all_day
+    event.startDate.return_value = _FakeNSDate(ts)
+    event.calendarItemIdentifier.return_value = "event-123"
+    event.calendar.return_value.title.return_value = "Personal"
+    event.calendar.return_value.colorStringRaw.return_value = "#0088FF"
+    return event
+
 
 def test_calendar_block_parses_events(mocker):
-    mock_run = mocker.patch("modules.calendar.subprocess.run")
-    mock_run.return_value = MagicMock(returncode=0, stdout=APPLESCRIPT_OUTPUT)
-    result = calendar_block()
+    store = MagicMock()
+    store.predicateForEventsWithStartDate_endDate_calendars_.return_value = "predicate"
+    store.eventsMatchingPredicate_.return_value = [
+        _make_event("Weekly sync", 1742979600, "Zoom"),
+        _make_event("Lunch with Sarah", 1742990400, "The Landmark Inn"),
+        _make_event("Phil's birthday", 1742990400, "", all_day=True),
+    ]
+
+    mocker.patch.object(calendar, "EventKit", types.SimpleNamespace(EKEntityTypeEvent=0))
+    mocker.patch.object(calendar, "_event_store", return_value=store)
+    mocker.patch.object(calendar, "_has_calendar_access", return_value=True)
+    mocker.patch.object(calendar, "_selected_calendars", return_value=["Personal"])
+    mocker.patch.object(calendar, "_nsdate_for_local", side_effect=lambda dt: dt)
+
+    result = calendar.calendar_block(["Personal"])
+
     assert len(result) == 3
     assert result[0]["title"] == "Weekly sync"
-    assert result[0]["time"] == "9:00am"
     assert result[0]["location"] == "Zoom"
+    assert result[0]["calendar"] == "Personal"
+    assert result[0]["identifier"] == "event-123"
+    assert result[0]["calendar_color"] == "#0088FF"
     assert result[0]["all_day"] is False
     assert result[2]["all_day"] is True
     assert result[2]["title"] == "Phil's birthday"
 
-def test_calendar_block_returns_none_on_applescript_error(mocker):
-    mock_run = mocker.patch("modules.calendar.subprocess.run")
-    mock_run.return_value = MagicMock(returncode=1, stdout="")
-    result = calendar_block()
-    assert result is None
 
-def test_calendar_block_returns_empty_list_when_no_events(mocker):
-    mock_run = mocker.patch("modules.calendar.subprocess.run")
-    mock_run.return_value = MagicMock(returncode=0, stdout="\n")
-    result = calendar_block()
-    assert result == []
+def test_calendar_block_returns_none_without_access(mocker):
+    mocker.patch.object(calendar, "EventKit", types.SimpleNamespace(EKEntityTypeEvent=0))
+    mocker.patch.object(calendar, "_has_calendar_access", return_value=False)
+    assert calendar.calendar_block() is None
+
+
+def test_calendar_block_returns_empty_list_when_no_matching_calendars(mocker):
+    store = MagicMock()
+    mocker.patch.object(calendar, "EventKit", types.SimpleNamespace(EKEntityTypeEvent=0))
+    mocker.patch.object(calendar, "_event_store", return_value=store)
+    mocker.patch.object(calendar, "_has_calendar_access", return_value=True)
+    mocker.patch.object(calendar, "_selected_calendars", return_value=[])
+
+    assert calendar.calendar_block(["Missing"]) == []
+
 
 def test_calendar_block_sorts_timed_events_chronologically(mocker):
-    out_of_order = "10:00am|Late meeting|\n9:00am|Early standup|\n"
-    mock_run = mocker.patch("modules.calendar.subprocess.run")
-    mock_run.return_value = MagicMock(returncode=0, stdout=out_of_order)
-    result = calendar_block()
+    store = MagicMock()
+    store.predicateForEventsWithStartDate_endDate_calendars_.return_value = "predicate"
+    store.eventsMatchingPredicate_.return_value = [
+        _make_event("Late meeting", 1742983200),
+        _make_event("Early standup", 1742979600),
+    ]
+
+    mocker.patch.object(calendar, "EventKit", types.SimpleNamespace(EKEntityTypeEvent=0))
+    mocker.patch.object(calendar, "_event_store", return_value=store)
+    mocker.patch.object(calendar, "_has_calendar_access", return_value=True)
+    mocker.patch.object(calendar, "_selected_calendars", return_value=["Personal"])
+    mocker.patch.object(calendar, "_nsdate_for_local", side_effect=lambda dt: dt)
+
+    result = calendar.calendar_block(["Personal"])
+
     assert result[0]["title"] == "Early standup"
     assert result[1]["title"] == "Late meeting"

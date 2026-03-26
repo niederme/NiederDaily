@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import anthropic
 from datetime import date
 
@@ -6,6 +8,11 @@ SYSTEM_PROMPT = (
     "One sentence only. Dry wit welcome. Reference the weather or the day's plans naturally. "
     "Do not start with 'Good morning'. Do not use exclamation marks."
 )
+
+CALENDAR_NAME_NOTES = {
+    "DC": "Danielle",
+    "JN": "John",
+}
 
 
 def welcome_block(api_key: str, weather_data: dict | None, calendar_events: list | None) -> str | None:
@@ -30,6 +37,15 @@ def welcome_block(api_key: str, weather_data: dict | None, calendar_events: list
             timed = [e for e in calendar_events if not e.get("all_day")]
             if timed:
                 parts.append(f"First event: {timed[0]['title']} at {timed[0]['time']}.")
+
+            titles = " ".join((e.get("title") or "") for e in calendar_events)
+            matched_notes = [
+                f"{initials} means {name}"
+                for initials, name in CALENDAR_NAME_NOTES.items()
+                if initials in titles
+            ]
+            if matched_notes:
+                parts.append("Calendar shorthand: " + "; ".join(matched_notes) + ".")
 
         user_prompt = " ".join(parts)
 

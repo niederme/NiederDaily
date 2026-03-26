@@ -1,46 +1,134 @@
-import subprocess
-from datetime import date
+from __future__ import annotations
 
-APPLESCRIPT = """
-set today to current date
-set todayStart to today - (time of today)
-set todayEnd to todayStart + 86399
-set output to ""
-tell application "Calendar"
-    repeat with cal in calendars
-        set evts to (every event of cal whose start date >= todayStart and start date <= todayEnd)
-        repeat with e in evts
-            set t to ""
-            try
-                if allday event of e is true then
-                    set t to ""
-                else
-                    set h to hours of (start date of e)
-                    set m to minutes of (start date of e)
-                    set ampm to "am"
-                    if h >= 12 then set ampm to "pm"
-                    if h > 12 then set h to h - 12
-                    if h = 0 then set h to 12
-                    set mins to m as string
-                    if m < 10 then set mins to "0" & mins
-                    set t to (h as string) & ":" & mins & ampm
-                end if
-            end try
-            set loc to ""
-            try
-                set loc to location of e
-                if loc is missing value then set loc to ""
-            end try
-            set output to output & t & "|" & (summary of e) & "|" & loc & "\n"
-        end repeat
-    end repeat
-end tell
-return output
-"""
+from datetime import date, datetime, time, timedelta
+import threading
+
+try:
+    import EventKit
+    from Foundation import NSDate
+except ImportError:  # pragma: no cover - exercised in integration environments
+    EventKit = None
+    NSDate = None
+
+
+def _event_store():
+    if EventKit is None:
+        return None
+    return EventKit.EKEventStore.alloc().init()
+
+
+def _readable_statuses() -> set[int]:
+    statuses = {EventKit.EKAuthorizationStatusAuthorized}
+    full_access = getattr(EventKit, "EKAuthorizationStatusFullAccess", None)
+    if full_access is not None:
+        statuses.add(full_access)
+    return statuses
+
+
+def _request_full_access(store, entity_type: int) -> bool:
+    done = threading.Event()
+    result = {"granted": False}
+
+    if entity_type == EventKit.EKEntityTypeEvent and hasattr(store, "requestFullAccessToEventsWithCompletion_"):
+        def completion(granted, error):
+            result["granted"] = bool(granted)
+            done.set()
+
+        store.requestFullAccessToEventsWithCompletion_(completion)
+    elif entity_type == EventKit.EKEntityTypeReminder and hasattr(store, "requestFullAccessToRemindersWithCompletion_"):
+        def completion(granted, error):
+            result["granted"] = bool(granted)
+            done.set()
+
+        store.requestFullAccessToRemindersWithCompletion_(completion)
+    elif hasattr(store, "requestAccessToEntityType_completion_"):
+        def completion(granted, error):
+            result["granted"] = bool(granted)
+            done.set()
+
+        store.requestAccessToEntityType_completion_(entity_type, completion)
+    else:
+        return False
+
+    done.wait(5)
+    return result["granted"]
+
+
+def _has_calendar_access(prompt: bool = False) -> bool:
+    if EventKit is None:
+        return False
+    status = EventKit.EKEventStore.authorizationStatusForEntityType_(EventKit.EKEntityTypeEvent)
+    if status in _readable_statuses():
+        return True
+    if not prompt:
+        return False
+    store = _event_store()
+    if store is None:
+        return False
+    return _request_full_access(store, EventKit.EKEntityTypeEvent)
+
+
+def calendar_access_granted(prompt: bool = False) -> bool:
+    return _has_calendar_access(prompt=prompt)
+
+
+def _nsdate_for_local(dt: datetime):
+    return NSDate.dateWithTimeIntervalSince1970_(dt.timestamp())
+
+
+def _selected_calendars(store, calendars: list | None):
+    available = list(store.calendarsForEntityType_(EventKit.EKEntityTypeEvent) or [])
+    if not calendars:
+        return available
+    wanted = set(calendars)
+    return [cal for cal in available if cal.title() in wanted]
+
+
+def _format_time_label(event) -> str | None:
+    if event.isAllDay():
+        return None
+    start_dt = datetime.fromtimestamp(event.startDate().timeIntervalSince1970())
+    return start_dt.strftime("%-I:%M%p").lower()
+
+
+def _calendar_name(event) -> str | None:
+    try:
+        calendar = event.calendar()
+        if calendar is None:
+            return None
+        title = calendar.title()
+        return title.strip() if title else None
+    except Exception:
+        return None
+
+
+def _calendar_identifier(event) -> str | None:
+    try:
+        identifier = event.calendarItemIdentifier()
+        return identifier.strip() if identifier else None
+    except Exception:
+        return None
+
+
+def _calendar_color(event) -> str | None:
+    try:
+        calendar = event.calendar()
+        if calendar is None:
+            return None
+
+        for attr in ("colorStringRaw", "colorString"):
+            value = getattr(calendar, attr, None)
+            if value is None:
+                continue
+            color = value() if callable(value) else value
+            if isinstance(color, str) and color.startswith("#") and len(color) in {4, 7, 9}:
+                return color
+    except Exception:
+        return None
+    return None
 
 
 def _time_sort_key(event):
-    """Parse time string and return minutes since midnight for sorting."""
     t = event.get("time") or ""
     try:
         h, rest = t.split(":")
@@ -56,33 +144,42 @@ def _time_sort_key(event):
         return 0
 
 
-def calendar_block() -> list | None:
+def calendar_block(calendars: list | None = None) -> list | None:
+    if EventKit is None or not _has_calendar_access():
+        return None
+
     try:
-        result = subprocess.run(
-            ["osascript", "-e", APPLESCRIPT],
-            capture_output=True, text=True, timeout=15
+        store = _event_store()
+        selected = _selected_calendars(store, calendars)
+        if not selected:
+            return []
+
+        start_dt = datetime.combine(date.today(), time.min)
+        end_dt = start_dt + timedelta(days=1)
+        predicate = store.predicateForEventsWithStartDate_endDate_calendars_(
+            _nsdate_for_local(start_dt),
+            _nsdate_for_local(end_dt),
+            selected,
         )
-        if result.returncode != 0:
-            return None
+        raw_events = list(store.eventsMatchingPredicate_(predicate) or [])
+
         events = []
-        for line in result.stdout.strip().splitlines():
-            if not line.strip():
-                continue
-            parts = line.split("|", 2)
-            if len(parts) < 2:
-                continue
-            time_str, title = parts[0].strip(), parts[1].strip()
-            location = parts[2].strip() if len(parts) > 2 else ""
+        for event in raw_events:
+            title = (event.title() or "").strip()
             if not title:
                 continue
-            time_val = time_str if time_str else None
+            time_val = _format_time_label(event)
+            location = (event.location() or "").strip()
             events.append({
                 "time": time_val,
                 "title": title,
                 "location": location,
+                "calendar": _calendar_name(event),
+                "identifier": _calendar_identifier(event),
+                "calendar_color": _calendar_color(event),
                 "all_day": time_val is None,
             })
-        # Sort: timed events chronologically, all-day last
+
         timed = sorted([e for e in events if not e["all_day"]], key=_time_sort_key)
         all_day = [e for e in events if e["all_day"]]
         return timed + all_day

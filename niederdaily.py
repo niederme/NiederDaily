@@ -16,11 +16,11 @@ logging.basicConfig(
 
 import config as cfg
 from modules.weather import weather_block
-from modules.calendar import calendar_block
+from modules.calendar import calendar_block, calendar_access_granted
 from modules.welcome import welcome_block
-from modules.reminders import reminders_block
+from modules.reminders import reminders_block, reminders_access_granted
 from modules.messages import messages_block
-from modules.photo import photo_block
+from modules.photo import photo_access_granted, photo_block
 from modules.nyt import nyt_block
 from renderer import render_email
 from sender import send_email
@@ -35,7 +35,7 @@ def run(config_path: str = None):
 
     # Step 1 & 2: gather weather and calendar first (needed by welcome)
     weather = _safe(weather_block, conf, calendar_events=[])
-    calendar = _safe(calendar_block)
+    calendar = _safe(calendar_block, conf.get("calendars"))
 
     # Re-run weather with calendar events for travel detection
     if calendar:
@@ -75,14 +75,28 @@ def _safe(fn, *args, **kwargs):
     try:
         return fn(*args, **kwargs)
     except Exception as e:
-        logging.warning(f"Module {fn.__name__} failed: {e}", exc_info=True)
+        fn_name = getattr(fn, "__name__", fn.__class__.__name__)
+        logging.warning(f"Module {fn_name} failed: {e}", exc_info=True)
         return None
 
 
 def preflight():
     """Interactive check of all integrations. Run this before the first scheduled run."""
     print("NiederDaily Preflight Check\n" + "=" * 40)
-    ok = True
+    blocking_ok = True
+    warnings = False
+
+    def report(label: str, succeeded: bool, success_message: str, failure_message: str, *, blocking: bool):
+        nonlocal blocking_ok, warnings
+        if succeeded:
+            print(f"✓ {label}{success_message}")
+            return
+        prefix = "✗" if blocking else "!"
+        print(f"{prefix} {label}: {failure_message}")
+        if blocking:
+            blocking_ok = False
+        else:
+            warnings = True
 
     # Config
     try:
@@ -93,51 +107,67 @@ def preflight():
         sys.exit(1)
 
     # Calendar
-    result = calendar_block()
-    if result is not None:
-        print(f"✓ Calendar ({len(result)} events today)")
-    else:
-        print("✗ Calendar: failed — grant Automation access to Calendar in System Settings")
-        ok = False
+    calendar_ready = calendar_access_granted(prompt=True)
+    result = calendar_block(conf.get("calendars")) if calendar_ready else None
+    report(
+        "Calendar",
+        result is not None,
+        f" ({len(result or [])} events today)",
+        "unavailable — grant full Calendar access in System Settings → Privacy & Security → Calendars. The newsletter will skip this section until access is granted.",
+        blocking=False,
+    )
 
     # Reminders
-    rem = reminders_block(conf.get("reminders_lists", []))
-    if rem is not None:
-        print("✓ Reminders")
-    else:
-        print("✗ Reminders: failed — grant Automation access to Reminders in System Settings")
-        ok = False
+    reminders_ready = reminders_access_granted(prompt=True)
+    rem = reminders_block(conf.get("reminders_lists", [])) if reminders_ready else None
+    report(
+        "Reminders",
+        rem is not None,
+        "",
+        "unavailable — grant Reminders access in System Settings → Privacy & Security → Reminders. The newsletter will skip this section until access is granted.",
+        blocking=False,
+    )
 
     # Photos
-    import subprocess
-    r = subprocess.run(["osascript", "-e", 'tell application "Photos" to return name of first media item'], capture_output=True, text=True, timeout=10)
-    if r.returncode == 0:
-        print("✓ Photos")
-    else:
-        print("✗ Photos: failed — grant Automation access to Photos in System Settings")
-        ok = False
+    photos_ready = photo_access_granted(prompt=True)
+    report(
+        "Photos",
+        photos_ready,
+        " (Photo Library accessible)",
+        "unavailable — grant Photos access in System Settings → Privacy & Security → Photos. The newsletter will skip this section until access is granted.",
+        blocking=False,
+    )
 
     # Messages / chat.db
     from modules.messages import DB_PATH
     from pathlib import Path as P
-    if P(DB_PATH).exists():
-        print("✓ Messages (chat.db readable — Full Disk Access granted)")
-    else:
-        print("✗ Messages: chat.db not accessible — grant Full Disk Access to Terminal in System Settings → Privacy & Security")
-        ok = False
+    report(
+        "Messages",
+        P(DB_PATH).exists(),
+        " (chat.db readable — Full Disk Access granted)",
+        "chat.db not accessible — grant Full Disk Access to Terminal in System Settings → Privacy & Security. The newsletter will skip this section until access is granted.",
+        blocking=False,
+    )
 
     # Address Book / Contacts
     try:
         import AddressBook
         book = AddressBook.ABAddressBook.sharedAddressBook()
-        if book:
-            print("✓ Contacts (Address Book accessible)")
-        else:
-            print("✗ Contacts: Address Book returned None — grant Contacts access in System Settings")
-            ok = False
+        report(
+            "Contacts",
+            bool(book),
+            " (Address Book accessible)",
+            "Address Book returned None — grant Contacts access in System Settings. Message senders will fall back to raw handles until access is granted.",
+            blocking=False,
+        )
     except Exception as e:
-        print(f"✗ Contacts: {e}")
-        ok = False
+        report(
+            "Contacts",
+            False,
+            "",
+            f"{e}. Message senders will fall back to raw handles until access is granted.",
+            blocking=False,
+        )
 
     # Gmail OAuth
     from pathlib import Path as P2
@@ -146,7 +176,7 @@ def preflight():
     if not secret_path.exists():
         print(f"✗ Gmail: client_secret.json not found at {secret_path}")
         print("  → Download it from Google Cloud Console (APIs & Services → Credentials)")
-        ok = False
+        blocking_ok = False
     else:
         try:
             from sender import get_gmail_service
@@ -154,7 +184,7 @@ def preflight():
             print("✓ Gmail (OAuth token valid)")
         except Exception as e:
             print(f"✗ Gmail OAuth: {e}")
-            ok = False
+            blocking_ok = False
 
     # Open-Meteo
     import requests
@@ -165,8 +195,13 @@ def preflight():
         r.raise_for_status()
         print("✓ Open-Meteo")
     except Exception as e:
-        print(f"✗ Open-Meteo: {e}")
-        ok = False
+        report(
+            "Open-Meteo",
+            False,
+            "",
+            f"{e}. The newsletter will skip the weather section until this recovers.",
+            blocking=False,
+        )
 
     # Claude Haiku
     try:
@@ -176,8 +211,13 @@ def preflight():
             messages=[{"role": "user", "content": "Say 'ok'"}])
         print("✓ Claude Haiku")
     except Exception as e:
-        print(f"✗ Claude Haiku: {e}")
-        ok = False
+        report(
+            "Claude Haiku",
+            False,
+            "",
+            f"{e}. The welcome line will be omitted until this recovers.",
+            blocking=False,
+        )
 
     # NYT
     if conf.get("nyt_api_key") and conf["nyt_api_key"] != "FILL_IN":
@@ -187,17 +227,26 @@ def preflight():
             r.raise_for_status()
             print("✓ NYT Top Stories")
         except Exception as e:
-            print(f"✗ NYT: {e}")
-            ok = False
+            report(
+                "NYT",
+                False,
+                "",
+                f"{e}. The news section will be skipped until this recovers.",
+                blocking=False,
+            )
     else:
         print("- NYT: API key not set (section will be skipped)")
 
     print("\n" + ("=" * 40))
-    if ok:
+    if blocking_ok and not warnings:
         print("All checks passed. Load the LaunchAgent with:")
         print("  launchctl load ~/Library/LaunchAgents/me.nieder.daily.plist")
+    elif blocking_ok:
+        print("Preflight degraded. Scheduling is safe, but unavailable sections will be skipped until access is granted.")
+        print("You can still load the LaunchAgent with:")
+        print("  launchctl load ~/Library/LaunchAgents/me.nieder.daily.plist")
     else:
-        print("Some checks failed. Fix the issues above before scheduling.")
+        print("Blocking checks failed. Fix the issues above before scheduling.")
 
 
 if __name__ == "__main__":
