@@ -46,6 +46,8 @@ a{color:#121212;}
 .list-main{flex:1;font-size:15px;line-height:1.35;color:#121212;}
 .item-link{color:#121212;text-decoration:none;}
 .item-link:hover{text-decoration:underline;}
+.item-row-link{display:flex;gap:18px;align-items:baseline;width:100%;color:inherit;text-decoration:none;}
+.item-row-link:hover .list-main{text-decoration:underline;}
 .list-meta{display:block;font-size:12px;line-height:1.4;color:#474a51;margin-top:4px;}
 .meta-sep{color:#9aa0a6;margin:0 6px;}
 .calendar-source{display:inline-flex;align-items:center;gap:6px;color:#6d7178;white-space:nowrap;}
@@ -56,6 +58,7 @@ a{color:#121212;}
 .msgmeta{font-size:12px;color:#474a51;line-height:1.45;margin-top:5px;}
 .nyt{display:flex;gap:20px;align-items:flex-start;padding:0 0 16px;margin:0 0 16px;border-bottom:1px solid rgba(214,208,198,0.55);}
 .nyt:last-child{padding-bottom:0;margin-bottom:0;border-bottom:0;}
+.nyt-link{display:flex;gap:20px;align-items:flex-start;width:100%;color:inherit;text-decoration:none;}
 .nytthumb{width:175px;height:117px;object-fit:cover;object-position:right center;flex-shrink:0;background:#f5efe5;}
 .nythed{font-size:17px;font-weight:700;line-height:1.18;color:#121212;margin-bottom:6px;}
 .nytdek{font-size:13px;color:#474a51;line-height:1.42;}
@@ -89,6 +92,7 @@ a{color:#121212;}
   .weather-summary{font-size:13px !important;line-height:1.4 !important;}
   .weather-meta{font-size:11px !important;}
   .list-row{display:block !important;padding-bottom:12px !important;margin-bottom:12px !important;}
+  .item-row-link{display:block !important;}
   .list-time{display:block !important;min-width:0 !important;margin-bottom:4px !important;}
   .list-main{font-size:14px !important;}
   .list-meta{font-size:11px !important;line-height:1.45 !important;}
@@ -97,6 +101,7 @@ a{color:#121212;}
   .msgname{font-size:15px !important;}
   .msgmeta{font-size:11px !important;}
   .nyt{display:flex !important;gap:10px !important;align-items:flex-start !important;padding-bottom:16px !important;margin-bottom:16px !important;}
+  .nyt-link{display:flex !important;gap:10px !important;align-items:flex-start !important;}
   .nytthumb{display:block !important;width:112px !important;height:75px !important;max-width:none !important;flex-shrink:0 !important;margin:0 !important;}
   .nythed{font-size:16px !important;margin-bottom:5px !important;}
   .nytdek{font-size:12px !important;line-height:1.45 !important;}
@@ -130,6 +135,11 @@ def _shortcut_url(item_type: str, payload: dict) -> str:
 def _linked_text(item_type: str, text: str, payload: dict) -> str:
     href = _shortcut_url(item_type, payload)
     return f'<a class="item-link" href="{_esc(href)}">{_esc(text)}</a>'
+
+
+def _row_link(item_type: str, time_html: str, main_html: str, payload: dict) -> str:
+    href = _shortcut_url(item_type, payload)
+    return f'<a class="item-row-link" href="{_esc(href)}">{time_html}{main_html}</a>'
 
 
 def _weather_icon(condition: str) -> str:
@@ -222,22 +232,19 @@ def _calendar_html(events: list, *, show_rule: bool = True) -> str:
         if meta_parts:
             meta_sep = '<span class="meta-sep">·</span>'
             loc = f'<span class="list-meta">{meta_sep.join(meta_parts)}</span>'
-        title = _linked_text(
-            "calendar",
-            e["title"],
-            {
-                "identifier": e.get("identifier"),
-                "date": date.today().isoformat(),
-                "time": e.get("time"),
-                "calendar": e.get("calendar"),
-                "location": e.get("location"),
-                "title": e["title"],
-            },
-        )
+        payload = {
+            "identifier": e.get("identifier"),
+            "date": date.today().isoformat(),
+            "time": e.get("time"),
+            "calendar": e.get("calendar"),
+            "location": e.get("location"),
+            "title": e["title"],
+        }
+        time_html = f'<span class="list-time">{time_str}</span>'
+        main_html = f'<span class="list-main">{_esc(e["title"])}{loc}</span>'
         rows.append(
             f'<div class="list-row">'
-            f'<span class="list-time">{time_str}</span>'
-            f'<div class="list-main">{title}{loc}</div></div>'
+            f'{_row_link("calendar", time_html, main_html, payload)}</div>'
         )
     return _section("Calendar", "".join(rows), show_rule=show_rule)
 
@@ -253,19 +260,15 @@ def _reminders_html(data: dict, *, show_rule: bool = True) -> str:
 
     rows = []
     for r in data.get("overdue", []):
-        title = _linked_text(
-            "reminder",
-            r["title"],
-            {"identifier": r.get("identifier"), "due": r.get("due"), "list": r.get("list"), "title": r["title"]},
-        )
-        rows.append(f'<div class="list-row"><span class="list-time">{BADGE_OVERDUE}</span><div class="list-main">{title}{reminder_meta(r)}</div></div>')
+        payload = {"identifier": r.get("identifier"), "due": r.get("due"), "list": r.get("list"), "title": r["title"]}
+        time_html = f'<span class="list-time">{BADGE_OVERDUE}</span>'
+        main_html = f'<span class="list-main">{_esc(r["title"])}{reminder_meta(r)}</span>'
+        rows.append(f'<div class="list-row">{_row_link("reminder", time_html, main_html, payload)}</div>')
     for r in data.get("today", []):
-        title = _linked_text(
-            "reminder",
-            r["title"],
-            {"identifier": r.get("identifier"), "due": r.get("due"), "list": r.get("list"), "title": r["title"]},
-        )
-        rows.append(f'<div class="list-row"><span class="list-time">{BADGE_TODAY}</span><div class="list-main">{title}{reminder_meta(r)}</div></div>')
+        payload = {"identifier": r.get("identifier"), "due": r.get("due"), "list": r.get("list"), "title": r["title"]}
+        time_html = f'<span class="list-time">{BADGE_TODAY}</span>'
+        main_html = f'<span class="list-main">{_esc(r["title"])}{reminder_meta(r)}</span>'
+        rows.append(f'<div class="list-row">{_row_link("reminder", time_html, main_html, payload)}</div>')
     next_day = None
     for r in data.get("upcoming", []):
         due_raw = r.get("due")
@@ -279,12 +282,10 @@ def _reminders_html(data: dict, *, show_rule: bool = True) -> str:
         except Exception:
             due = due_raw
         badge = f'<span style="display:inline-block;min-width:56px;color:{MUTED};font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">{due}</span>'
-        title = _linked_text(
-            "reminder",
-            r["title"],
-            {"identifier": r.get("identifier"), "due": r.get("due"), "list": r.get("list"), "title": r["title"]},
-        )
-        rows.append(f'<div class="list-row"><span class="list-time">{badge}</span><div class="list-main">{title}{reminder_meta(r)}</div></div>')
+        payload = {"identifier": r.get("identifier"), "due": r.get("due"), "list": r.get("list"), "title": r["title"]}
+        time_html = f'<span class="list-time">{badge}</span>'
+        main_html = f'<span class="list-main">{_esc(r["title"])}{reminder_meta(r)}</span>'
+        rows.append(f'<div class="list-row">{_row_link("reminder", time_html, main_html, payload)}</div>')
     if not rows:
         return _section("Reminders", '<div class="supporting">All clear.</div>', show_rule=show_rule)
     return _section("Reminders", "".join(rows), show_rule=show_rule)
@@ -313,9 +314,9 @@ def _nyt_html(stories: list, *, show_rule: bool = True) -> str:
         if s.get("byline"):
             byline = f'<div class="nytbyline">{_esc(s["byline"])}</div>'
         rows.append(
-            f'<div class="nyt"><div style="flex:1;"><div class="nythed">'
-            f'<a href="{_esc(s["url"])}" style="color:{INK};text-decoration:none;">{_esc(s["title"])}</a></div>'
-            f'<div class="nytdek">{_esc(s["abstract"])}</div>{byline}</div>{img}</div>'
+            f'<div class="nyt"><a class="nyt-link" href="{_esc(s["url"])}">'
+            f'<div style="flex:1;"><div class="nythed">{_esc(s["title"])}</div>'
+            f'<div class="nytdek">{_esc(s["abstract"])}</div>{byline}</div>{img}</a></div>'
         )
     return _section("New York Times Most Popular", "".join(rows), show_rule=show_rule)
 
@@ -354,15 +355,17 @@ def _photo_html(photo: tuple, *, show_rule: bool = True) -> str:
             "favorite": bool(meta.get("is_favorite")),
         },
     )
-    open_html = f'<a class="photo-open" href="{_esc(open_link)}">Open in Photos</a>'
+    open_html = '<span class="photo-open">Open in Photos</span>'
     meta_html = f'<div class="photo-meta"><span>{meta_line}</span><span>{open_html}</span></div>' if meta_line else f'<div class="photo-meta"><span></span><span>{open_html}</span></div>'
     body = (
         '<div class="photo-module">'
         f'<div class="photo-date">{_esc(pretty_date)}</div>'
+        f'<a href="{_esc(open_link)}" style="color:inherit;text-decoration:none;display:block;">'
         '<div class="photo-frame"><img src="cid:onthisday" alt="On This Day photo"></div>'
         f'{description_html}'
         f'{meta_html}'
         f'{keywords_html}'
+        '</a>'
         '</div>'
     )
     return _section("On This Day", body, show_rule=show_rule)
