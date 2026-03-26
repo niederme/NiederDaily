@@ -1,27 +1,54 @@
 import jwt
 import time
-from pathlib import Path
 import requests
 from datetime import datetime
-from typing import Optional
+from pathlib import Path
+
+import anthropic
 
 WEATHERKIT_URL = "https://weatherkit.apple.com/api/v1/weather/en"
+NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+USER_AGENT = "NiederDaily/1.0 (personal newsletter)"
 
-WMO_CODES = {
-    0: "Clear Sky", 1: "Mainly Clear", 2: "Partly Cloudy", 3: "Overcast",
-    45: "Foggy", 48: "Icy Fog",
-    51: "Light Drizzle", 53: "Drizzle", 55: "Heavy Drizzle",
-    61: "Light Rain", 63: "Rain", 65: "Heavy Rain",
-    71: "Light Snow", 73: "Snow", 75: "Heavy Snow",
-    77: "Snow Grains",
-    80: "Light Showers", 81: "Showers", 82: "Heavy Showers",
-    85: "Snow Showers", 86: "Heavy Snow Showers",
-    95: "Thunderstorm", 96: "Thunderstorm with Hail", 99: "Heavy Thunderstorm with Hail",
+CONDITION_LABELS = {
+    "Clear": "Clear",
+    "MostlyClear": "Mostly Clear",
+    "PartlyCloudy": "Partly Cloudy",
+    "MostlyCloudy": "Mostly Cloudy",
+    "Cloudy": "Cloudy",
+    "Foggy": "Foggy",
+    "Haze": "Hazy",
+    "Smoky": "Smoky",
+    "Breezy": "Breezy",
+    "Windy": "Windy",
+    "Drizzle": "Drizzle",
+    "Rain": "Rain",
+    "HeavyRain": "Heavy Rain",
+    "SunShowers": "Sun Showers",
+    "Thunderstorms": "Thunderstorms",
+    "IsolatedThunderstorms": "Isolated Thunderstorms",
+    "ScatteredThunderstorms": "Scattered Thunderstorms",
+    "StrongStorms": "Strong Storms",
+    "Flurries": "Flurries",
+    "Snow": "Snow",
+    "SunFlurries": "Sun Flurries",
+    "Sleet": "Sleet",
+    "WintryMix": "Wintry Mix",
+    "FreezingDrizzle": "Freezing Drizzle",
+    "FreezingRain": "Freezing Rain",
+    "BlowingSnow": "Blowing Snow",
+    "HeavySnow": "Heavy Snow",
+    "Blizzard": "Blizzard",
+    "BlowingDust": "Blowing Dust",
+    "Frigid": "Frigid",
+    "Hail": "Hail",
+    "Hot": "Hot",
+    "Hurricane": "Hurricane",
+    "TropicalStorm": "Tropical Storm",
 }
 
-NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
-USER_AGENT = "NiederDaily/1.0 (personal newsletter)"
+# No CONDITION_ICONS dict needed — renderer uses existing _weather_icon() SVGs,
+# which keyword-match on the condition string (e.g. "rain", "snow", "thunder", "clear", "fog").
 
 
 def _make_jwt(config: dict) -> str:
@@ -36,12 +63,8 @@ def _make_jwt(config: dict) -> str:
     )
 
 
-def wmo_label(code: int) -> str:
-    return WMO_CODES.get(code, "Unknown")
-
-
 def _fmt_time(iso: str) -> str:
-    """Convert '2026-03-25T06:52' to '6:52am'."""
+    """Convert RFC 3339 timestamp (e.g. '2026-03-25T06:52:00-05:00') to '6:52am'."""
     try:
         dt = datetime.fromisoformat(iso)
         return dt.strftime("%-I:%M%p").lower()
@@ -49,34 +72,58 @@ def _fmt_time(iso: str) -> str:
         return iso
 
 
-def fetch_weather(lat: float, lon: float, name: str) -> Optional[dict]:
+def _parse_alert(raw: dict) -> dict:
+    expires_raw = raw.get("eventEndTime", "")
     try:
-        resp = requests.get(OPEN_METEO_URL, params={
-            "latitude": lat, "longitude": lon,
-            "current": "temperature_2m,weathercode",
-            "daily": "temperature_2m_max,temperature_2m_min,sunrise,sunset",
-            "temperature_unit": "fahrenheit",
-            "timezone": "auto",
-            "forecast_days": 1,
-        }, timeout=10)
+        expires = datetime.fromisoformat(expires_raw).strftime("%a %-I:%M%p").lower()
+        expires = expires[0].upper() + expires[1:]  # capitalize day
+    except Exception:
+        expires = expires_raw
+    return {
+        "event": raw.get("eventText", "Weather Alert"),
+        "expires": expires,
+        "agency": raw.get("source", ""),
+        "url": raw.get("detailsUrl", ""),
+    }
+
+
+def fetch_weather(lat: float, lon: float, name: str, config: dict) -> dict | None:
+    try:
+        token = _make_jwt(config)
+        resp = requests.get(
+            f"{WEATHERKIT_URL}/{lat}/{lon}",
+            params={
+                "dataSets": "currentWeather,forecastDaily,weatherAlerts",
+                "unitSystem": "imperial",
+                "countryCode": "US",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=10,
+        )
         resp.raise_for_status()
         data = resp.json()
-        current = data["current"]
-        daily = data["daily"]
+
+        current = data["currentWeather"]
+        code = current["conditionCode"]
+        today = data["forecastDaily"]["days"][0]
+        alerts_raw = data.get("weatherAlerts", {}).get("alerts", [])
+
         return {
             "location": name,
-            "temp": round(current["temperature_2m"]),
-            "condition": wmo_label(current["weathercode"]),
-            "high": round(daily["temperature_2m_max"][0]),
-            "low": round(daily["temperature_2m_min"][0]),
-            "sunrise": _fmt_time(daily["sunrise"][0]),
-            "sunset": _fmt_time(daily["sunset"][0]),
+            "temp": round(current["temperature"]),
+            "condition": CONDITION_LABELS.get(code, "Unknown"),
+            "high": round(today["temperatureMax"]),
+            "low": round(today["temperatureMin"]),
+            "sunrise": _fmt_time(today["sunrise"]),
+            "sunset": _fmt_time(today["sunset"]),
+            "alerts": [_parse_alert(a) for a in alerts_raw],
+            "sentence": "",  # populated by niederdaily.py after final weather call
         }
     except Exception:
         return None
 
 
-def geocode_location(location_str: str) -> Optional[dict]:
+def geocode_location(location_str: str) -> dict | None:
     try:
         resp = requests.get(NOMINATIM_URL, params={
             "q": location_str, "format": "json", "limit": 1,
@@ -91,24 +138,52 @@ def geocode_location(location_str: str) -> Optional[dict]:
         return None
 
 
-def weather_block(config: dict, calendar_events: list) -> Optional[dict]:
+def weather_sentence(loc: dict, api_key: str) -> str:
+    """Generate a one-sentence Haiku description for a single location dict.
+    Returns "" on any failure — never raises.
+    """
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        prompt = (
+            f"Write a single short sentence describing today's weather for {loc['location']}. "
+            f"Current: {loc['temp']}°F, {loc['condition']}. "
+            f"High {loc['high']}°, Low {loc['low']}°. "
+            f"Be specific and vivid. No greeting. Plain text only."
+        )
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=60,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return resp.content[0].text.strip()
+    except Exception:
+        return ""
+
+
+DEFAULT_TRAVEL_CALENDARS = {"Little York", "niederCal", "TripIt"}
+
+
+def weather_block(config: dict, calendar_events: list) -> dict | None:
     default = config["default_location"]
-    home = fetch_weather(default["lat"], default["lon"], default["name"])
+    home = fetch_weather(default["lat"], default["lon"], default["name"], config)
     if home is None:
         return None
 
     travel = None
     travel_city = None
+    travel_calendars = set(config.get("weather_calendars", DEFAULT_TRAVEL_CALENDARS))
     for event in sorted(calendar_events, key=lambda e: (e.get("all_day", True), e.get("start", ""))):
+        source_calendar = event.get("calendar")
+        if source_calendar not in travel_calendars:
+            continue
         loc = event.get("location", "").strip()
         if not loc:
             continue
         geo = geocode_location(loc)
         if geo is None:
             continue
-        # Check if it's a different city (rough: compare display name vs default name)
         if default["name"].split(",")[0].lower() not in geo["name"].lower():
-            travel = fetch_weather(geo["lat"], geo["lon"], geo["name"].split(",")[0].strip())
+            travel = fetch_weather(geo["lat"], geo["lon"], geo["name"].split(",")[0].strip(), config)
             travel_city = geo["name"].split(",")[0].strip()
             break
 
