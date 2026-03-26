@@ -81,11 +81,11 @@ Single request fetching all needed datasets, requesting imperial units to avoid 
 GET https://weatherkit.apple.com/api/v1/weather/en/{lat}/{lon}
     ?dataSets=currentWeather,forecastDaily,weatherAlerts
     &unitSystem=imperial
-    &alertsCountryCode=US
+    &countryCode=US
     Authorization: Bearer <token>
 ```
 
-**Note:** `alertsCountryCode` is required by Apple for the `weatherAlerts` dataset to be populated. Without it, the alerts array will be empty even in supported regions. Hardcoded to `US` for this personal use case; could be made configurable if needed later.
+**Note:** `countryCode` is required by Apple for the `weatherAlerts` dataset to be populated. Without it, the alerts array will be empty even in supported regions. Hardcoded to `US` for this personal use case; could be made configurable if needed later.
 
 ### Data Extraction
 
@@ -272,7 +272,7 @@ Weather
 - **Sentence line**: Haiku-generated sentence (`loc["sentence"]`), smaller font, below the temp; omitted if empty string (travel locations)
 - **Metadata line**: High/Low · Sunrise · Sunset (unchanged)
 - **Alert banner** (only when `loc["alerts"]` is non-empty): rendered below metadata
-  - `⚠ {event}` as a linked anchor (`href=alert["url"]`)
+  - `⚠ {event}` as a linked anchor (`href=alert["url"]`) — links to the provider's full alert page; the banner is a summary only and does not rewrite or replace the provider's official alert content
   - Expiry and agency in smaller text below
   - Styled with inline CSS amber/red accent (e.g. `style="color:#c0392b;font-weight:600;"`) — email clients require all styles to be inline; no `<style>` blocks
 - **Attribution**: small linked "Weather" line at bottom per Apple requirement (`href="https://weatherkit.apple.com/legal-attribution.html"`)

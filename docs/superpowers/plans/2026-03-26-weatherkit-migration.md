@@ -508,11 +508,26 @@ def test_weather_block_with_travel(requests_mock):
     requests_mock.get("https://nominatim.openstreetmap.org/search", json=NOMINATIM_RESPONSE)
     with patch("modules.weather._make_jwt", return_value="tok"):
         from modules.weather import weather_block
-        events = [{"title": "Meeting", "location": "New York, NY", "all_day": False, "start": "9:00am"}]
+        # calendar field must match a travel calendar or the event is skipped
+        events = [{"title": "Meeting", "location": "New York, NY", "all_day": False,
+                   "start": "9:00am", "calendar": "niederCal"}]
         result = weather_block(WEATHERKIT_CONFIG, calendar_events=events)
 
     assert len(result["locations"]) == 2
     assert result["travel_city"] == "New York"
+
+def test_weather_block_ignores_events_from_non_travel_calendars(requests_mock):
+    requests_mock.get(
+        "https://weatherkit.apple.com/api/v1/weather/en/41.2512/-74.3607",
+        json=WEATHERKIT_RESPONSE,
+    )
+    with patch("modules.weather._make_jwt", return_value="tok"):
+        from modules.weather import weather_block
+        events = [{"title": "Meeting", "location": "New York, NY", "all_day": False,
+                   "start": "9:00am", "calendar": "Work"}]  # not in travel_calendars
+        result = weather_block(WEATHERKIT_CONFIG, calendar_events=events)
+
+    assert len(result["locations"]) == 1  # travel not triggered
 
 def test_weather_block_returns_none_on_failure(requests_mock):
     requests_mock.get(
@@ -687,7 +702,7 @@ def fetch_weather(lat: float, lon: float, name: str, config: dict) -> dict | Non
             params={
                 "dataSets": "currentWeather,forecastDaily,weatherAlerts",
                 "unitSystem": "imperial",
-                "alertsCountryCode": "US",
+                "countryCode": "US",
             },
             headers={"Authorization": f"Bearer {token}"},
             timeout=10,
@@ -753,6 +768,9 @@ def weather_sentence(loc: dict, api_key: str) -> str:
         return ""
 
 
+DEFAULT_TRAVEL_CALENDARS = {"Little York", "niederCal", "TripIt"}
+
+
 def weather_block(config: dict, calendar_events: list) -> dict | None:
     default = config["default_location"]
     home = fetch_weather(default["lat"], default["lon"], default["name"], config)
@@ -761,7 +779,11 @@ def weather_block(config: dict, calendar_events: list) -> dict | None:
 
     travel = None
     travel_city = None
+    travel_calendars = set(config.get("weather_calendars", DEFAULT_TRAVEL_CALENDARS))
     for event in sorted(calendar_events, key=lambda e: (e.get("all_day", True), e.get("start", ""))):
+        source_calendar = event.get("calendar")
+        if source_calendar not in travel_calendars:
+            continue
         loc = event.get("location", "").strip()
         if not loc:
             continue
@@ -991,9 +1013,9 @@ Then, after the two `weather_block` calls (lines 37–42), add:
 
 ```python
 
-# (existing lines 37-42 unchanged)
+# (existing lines 37-42 unchanged — note calendar_block takes conf.get("calendars"))
 weather = _safe(weather_block, conf, calendar_events=[])
-calendar = _safe(calendar_block)
+calendar = _safe(calendar_block, conf.get("calendars"))
 
 if calendar:
     weather = _safe(weather_block, conf, calendar_events=calendar)
@@ -1006,26 +1028,26 @@ if weather:
 
 - [ ] **Step 2: Replace the Open-Meteo preflight block**
 
-Find this block in `niederdaily.py`:
+The real `preflight()` uses a `report()` helper and `blocking_ok`/`warnings` vars (not `ok`). The `import requests` at line 180 is shared with the NYT check that follows — keep it in place.
+
+Find this block in `niederdaily.py` (lines 179–194):
 
 ```python
     # Open-Meteo
     import requests
     try:
-        r = requests.get("https://api.open-meteo.com/v1/forecast",
-            params={"latitude": 41.25, "longitude": -74.36, "current": "temperature_2m",
-                    "forecast_days": 1}, timeout=10)
+        r = requests.get("https://api.open-meteo.com/v1/forecast", ...)
         r.raise_for_status()
         print("✓ Open-Meteo")
     except Exception as e:
-        print(f"✗ Open-Meteo: {e}")
-        ok = False
+        report("Open-Meteo", False, "", f"{e}. ...", blocking=False)
 ```
 
-Replace it with:
+Replace it with (keep `import requests` — NYT check below uses it):
 
 ```python
     # WeatherKit
+    import requests
     try:
         from modules.weather import _make_jwt
         token = _make_jwt(conf)
@@ -1037,10 +1059,15 @@ Replace it with:
             timeout=10,
         )
         r.raise_for_status()
-        print("✓ WeatherKit")
+        report("WeatherKit", True, "", "", blocking=False)
     except Exception as e:
-        print(f"✗ WeatherKit: {e}")
-        ok = False
+        report(
+            "WeatherKit",
+            False,
+            "",
+            f"{e}. The newsletter will skip the weather section until this recovers.",
+            blocking=False,
+        )
 ```
 
 - [ ] **Step 3: Run full test suite**
