@@ -47,6 +47,7 @@ a{color:#121212;}
 .nytthumb{width:84px;height:84px;object-fit:cover;object-position:right center;flex-shrink:0;background:#f5efe5;}
 .nythed{font-size:17px;font-weight:700;line-height:1.18;color:#121212;margin-bottom:6px;}
 .nytdek{font-size:13px;color:#474a51;line-height:1.42;}
+.nytbyline{font-size:11px;color:#474a51;line-height:1.4;margin-top:7px;}
 .photo-caption{padding:14px 40px;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#474a51;background:#f5efe5;border-bottom:1px solid #d6d0c6;}
 .footer{padding:18px 40px 36px;font-size:11px;color:#474a51;border-top:0;background:#ffffff;}
 .footer a{color:#121212;text-decoration:none;border-bottom:1px solid rgba(18,18,18,0.65);}
@@ -189,10 +190,13 @@ def _nyt_html(stories: list) -> str:
         img = ""
         if s.get("thumbnail"):
             img = f'<img class="nytthumb" src="{_esc(s["thumbnail"])}" alt="">'
+        byline = ""
+        if s.get("byline"):
+            byline = f'<div class="nytbyline">{_esc(s["byline"])}</div>'
         rows.append(
             f'<div class="nyt"><div style="flex:1;"><div class="nythed">'
             f'<a href="{_esc(s["url"])}" style="color:{INK};text-decoration:none;">{_esc(s["title"])}</a></div>'
-            f'<div class="nytdek">{_esc(s["abstract"])}</div></div>{img}</div>'
+            f'<div class="nytdek">{_esc(s["abstract"])}</div>{byline}</div>{img}</div>'
         )
     return _section("In the News", "".join(rows))
 

@@ -9,7 +9,7 @@ CALENDAR = [{"time": "9:00am", "title": "Weekly sync", "location": "", "all_day"
 REMINDERS = {"overdue": [{"title": "Call accountant", "due": "2026-03-20"}], "today": [], "upcoming": []}
 MESSAGES = [{"name": "Mom", "handle": "+15555550101", "is_contact": True, "count": 4, "last_time": "8:14pm", "needs_reply": True}]
 PHOTO = (b'\xff\xd8\xff' + b'\x00' * 100, {"year": "2019", "date": "2019-03-25", "location": "Warwick, NY", "is_favorite": True})
-NYT = [{"title": "Story One", "abstract": "Things happened.", "url": "https://nytimes.com/1", "thumbnail": None}]
+NYT = [{"title": "Story One", "abstract": "Things happened.", "byline": "By Reporter One", "url": "https://nytimes.com/1", "thumbnail": None}]
 
 def test_render_returns_mime_message():
     msg = render_email(
@@ -105,3 +105,4 @@ def test_render_nyt_without_thumbnail_has_no_placeholder_block():
     html_part = next(p for p in msg.get_payload() if p.get_content_type() == "text/html")
     html = html_part.get_payload(decode=True).decode()
     assert 'class="nytthumb"' not in html
+    assert "By Reporter One" in html
