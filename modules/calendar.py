@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta
+import logging
 import threading
 
 try:
@@ -9,6 +10,9 @@ try:
 except ImportError:  # pragma: no cover - exercised in integration environments
     EventKit = None
     NSDate = None
+
+
+log = logging.getLogger(__name__)
 
 
 def _event_store():
@@ -145,7 +149,11 @@ def _time_sort_key(event):
 
 
 def calendar_block(calendars: list | None = None) -> list | None:
-    if EventKit is None or not _has_calendar_access():
+    if EventKit is None:
+        log.warning("Calendar block unavailable: EventKit framework not installed")
+        return None
+    if not _has_calendar_access():
+        log.warning("Calendar block unavailable: calendar access not granted for this runtime")
         return None
 
     try:
@@ -184,4 +192,5 @@ def calendar_block(calendars: list | None = None) -> list | None:
         all_day = [e for e in events if e["all_day"]]
         return timed + all_day
     except Exception:
+        log.warning("Calendar block failed while reading EventKit events", exc_info=True)
         return None

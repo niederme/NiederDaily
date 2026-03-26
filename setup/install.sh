@@ -4,6 +4,7 @@ set -e
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENV_DIR="$REPO_DIR/.venv"
 SCRIPT_PATH="$REPO_DIR/niederdaily.py"
+APP_PATH="$HOME/Applications/NiederDaily.app"
 CONFIG_DIR="$HOME/.niederdaily"
 LOG_DIR="$CONFIG_DIR/logs"
 PLIST_NAME="me.nieder.daily.plist"
@@ -45,10 +46,13 @@ echo "✓ Virtual environment ready at $VENV_DIR"
 
 PYTHON_PATH="$VENV_DIR/bin/python"
 
-# 4. Generate plist
+# 4. Build app wrapper
+"$REPO_DIR/setup/build_niederdaily_app.sh"
+echo "✓ Built app wrapper at $APP_PATH"
+
+# 5. Generate plist
 sed \
-  -e "s|__PYTHON_PATH__|$PYTHON_PATH|g" \
-  -e "s|__SCRIPT_PATH__|$SCRIPT_PATH|g" \
+  -e "s|__APP_PATH__|$APP_PATH|g" \
   -e "s|__LOG_DIR__|$LOG_DIR|g" \
   "$REPO_DIR/setup/me.nieder.daily.plist.template" > "$PLIST_DEST"
 echo "✓ LaunchAgent plist written to $PLIST_DEST"
@@ -58,4 +62,5 @@ echo "Next steps:"
 echo "  1. Edit $CONFIG_PATH — fill in recipient_email, nyt_api_key, anthropic_api_key"
 echo "  2. Download client_secret.json from Google Cloud Console → $CONFIG_DIR/client_secret.json"
 echo "  3. Run preflight:  $PYTHON_PATH $SCRIPT_PATH --preflight"
-echo "  4. Load agent:     launchctl load $PLIST_DEST"
+echo "  4. Grant Calendar, Reminders, Photos, and Full Disk Access to $APP_PATH"
+echo "  5. Load agent:     launchctl bootstrap gui/\$(id -u) $PLIST_DEST"

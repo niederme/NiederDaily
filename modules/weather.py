@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import requests
 from datetime import datetime
+import logging
 
 WMO_CODES = {
     0: "Clear Sky", 1: "Mainly Clear", 2: "Partly Cloudy", 3: "Overcast",
@@ -21,6 +22,7 @@ NWS_ALERTS_URL = "https://api.weather.gov/alerts/active"
 USER_AGENT = "NiederDaily/1.0 (personal newsletter)"
 DEFAULT_TRAVEL_CALENDARS = {"Little York", "niederCal", "TripIt"}
 SEVERITY_RANK = {"Extreme": 4, "Severe": 3, "Moderate": 2, "Minor": 1, "Unknown": 0}
+log = logging.getLogger(__name__)
 
 
 def wmo_label(code: int) -> str:
@@ -166,34 +168,38 @@ def _summary_line(condition: str, daily: dict, hourly: dict, alert_summary: str 
 
 
 def fetch_weather(lat: float, lon: float, name: str) -> dict | None:
-    try:
-        resp = requests.get(OPEN_METEO_URL, params={
-            "latitude": lat, "longitude": lon,
-            "current": "temperature_2m,weathercode",
-            "hourly": "wind_gusts_10m",
-            "daily": "temperature_2m_max,temperature_2m_min,sunrise,sunset,precipitation_probability_max,weathercode",
-            "temperature_unit": "fahrenheit",
-            "timezone": "auto",
-            "forecast_days": 2,
-        }, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-        current = data["current"]
-        daily = data["daily"]
-        hourly = data.get("hourly", {})
-        alert_summary = _fetch_alert_summary(lat, lon)
-        return {
-            "location": name,
-            "temp": round(current["temperature_2m"]),
-            "condition": wmo_label(current["weathercode"]),
-            "high": round(daily["temperature_2m_max"][0]),
-            "low": round(daily["temperature_2m_min"][0]),
-            "sunrise": _fmt_time(daily["sunrise"][0]),
-            "sunset": _fmt_time(daily["sunset"][0]),
-            "summary": _summary_line(wmo_label(current["weathercode"]), daily, hourly, alert_summary=alert_summary),
-        }
-    except Exception:
-        return None
+    last_error = None
+    for _ in range(2):
+        try:
+            resp = requests.get(OPEN_METEO_URL, params={
+                "latitude": lat, "longitude": lon,
+                "current": "temperature_2m,weathercode",
+                "hourly": "wind_gusts_10m",
+                "daily": "temperature_2m_max,temperature_2m_min,sunrise,sunset,precipitation_probability_max,weathercode",
+                "temperature_unit": "fahrenheit",
+                "timezone": "auto",
+                "forecast_days": 2,
+            }, timeout=10)
+            resp.raise_for_status()
+            data = resp.json()
+            current = data["current"]
+            daily = data["daily"]
+            hourly = data.get("hourly", {})
+            alert_summary = _fetch_alert_summary(lat, lon)
+            return {
+                "location": name,
+                "temp": round(current["temperature_2m"]),
+                "condition": wmo_label(current["weathercode"]),
+                "high": round(daily["temperature_2m_max"][0]),
+                "low": round(daily["temperature_2m_min"][0]),
+                "sunrise": _fmt_time(daily["sunrise"][0]),
+                "sunset": _fmt_time(daily["sunset"][0]),
+                "summary": _summary_line(wmo_label(current["weathercode"]), daily, hourly, alert_summary=alert_summary),
+            }
+        except Exception as exc:
+            last_error = exc
+    log.warning("Weather fetch failed for %s (%s, %s): %s", name, lat, lon, last_error)
+    return None
 
 
 def geocode_location(location_str: str) -> dict | None:
@@ -207,7 +213,8 @@ def geocode_location(location_str: str) -> dict | None:
             return None
         r = results[0]
         return {"lat": float(r["lat"]), "lon": float(r["lon"]), "name": r["display_name"]}
-    except Exception:
+    except Exception as exc:
+        log.warning("Weather geocode failed for %r: %s", location_str, exc)
         return None
 
 

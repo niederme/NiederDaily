@@ -7,8 +7,8 @@
     <string>me.nieder.daily</string>
     <key>ProgramArguments</key>
     <array>
-        <string>__PYTHON_PATH__</string>
-        <string>__SCRIPT_PATH__</string>
+        <string>__APP_PATH__/Contents/MacOS/NiederDaily</string>
+        <string>--run</string>
     </array>
     <key>StartCalendarInterval</key>
     <dict>
