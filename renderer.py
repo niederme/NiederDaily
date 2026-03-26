@@ -129,12 +129,12 @@ def _row_link(item_type: str, time_html: str, main_html: str, payload: dict) -> 
     return f'<a class="item-row-link" href="{_esc(href)}">{time_html}{main_html}</a>'
 
 
-def _render_sf_symbol(name: str, hex_color: str, size: int = 56) -> str | None:
+def _render_sf_symbol(name: str, hex_color: str, size: int = 56) -> bytes | None:
+    """Render SF Symbol as PNG bytes (for CID attachment)."""
     try:
         from AppKit import (NSImage, NSImageSymbolConfiguration, NSColor,
                             NSBitmapImageRep, NSGraphicsContext)
         from Foundation import NSMakeRect, NSMakeSize
-        import base64
         r = int(hex_color[1:3], 16) / 255
         g = int(hex_color[3:5], 16) / 255
         b = int(hex_color[5:7], 16) / 255
@@ -154,8 +154,7 @@ def _render_sf_symbol(name: str, hex_color: str, size: int = 56) -> str | None:
         img.drawInRect_(NSMakeRect(0, 0, px, px))
         NSGraphicsContext.restoreGraphicsState()
         png_data = bmp.representationUsingType_properties_(4, None)
-        b64 = base64.b64encode(bytes(png_data)).decode()
-        return f'<img src="data:image/png;base64,{b64}" width="{size}" height="{size}" alt="" style="display:inline-block;vertical-align:middle;">'
+        return bytes(png_data)
     except Exception:
         return None
 
@@ -194,13 +193,24 @@ _SF_SYMBOL_MAP = [
 ]
 
 
-def _weather_icon(condition: str) -> str:
+def _weather_icon(condition: str, icon_registry: dict) -> str:
+    """Returns icon HTML. Renders SF Symbol as CID attachment; registers in icon_registry."""
     c = condition.lower()
     for keyword, symbol, color in _SF_SYMBOL_MAP:
         if keyword in c:
-            img = _render_sf_symbol(symbol, color)
-            if img:
-                return f'<span class="weather-icon" aria-hidden="true">{img}</span>'
+            if symbol not in icon_registry:
+                png_bytes = _render_sf_symbol(symbol, color)
+                if png_bytes:
+                    cid = f"wicon-{symbol.replace('.', '-').replace(' ', '-')}"
+                    icon_registry[symbol] = (cid, png_bytes)
+            if symbol in icon_registry:
+                cid, _ = icon_registry[symbol]
+                return (
+                    f'<span class="weather-icon" aria-hidden="true">'
+                    f'<img src="cid:{cid}" width="56" height="56" alt=""'
+                    f' style="display:inline-block;vertical-align:middle;">'
+                    f'</span>'
+                )
             break
     # fallback: plain cloud SVG
     return (
@@ -211,15 +221,15 @@ def _weather_icon(condition: str) -> str:
     )
 
 
-def _weather_html(data: dict) -> str:
+def _weather_html(data: dict) -> tuple[str, list]:
+    """Returns (html, icon_attachments) where icon_attachments is [(cid, png_bytes), ...]."""
     parts = []
+    icon_registry: dict = {}  # symbol_name -> (cid, png_bytes)
     for loc in data["locations"]:
-        # sentence replaces summary — same CSS class, same position
         sentence_html = ""
         if loc.get("sentence"):
             sentence_html = f'<div class="weather-summary">{_esc(loc["sentence"])}</div>'
 
-        # alert banner (inline styles — email client compatibility)
         alert_html = ""
         for alert in loc.get("alerts", []):
             alert_html += (
@@ -232,7 +242,6 @@ def _weather_html(data: dict) -> str:
                 f'</div>'
             )
 
-        # attribution (Apple requirement — inline styles)
         attribution_html = (
             f'<div style="font-size:10px;color:#9aa0a6;margin-top:8px;">'
             f'<a href="https://weatherkit.apple.com/legal-attribution.html" '
@@ -243,17 +252,16 @@ def _weather_html(data: dict) -> str:
             f'<div class="weather-card">'
             f'<div class="module-place">{_esc(loc["location"])}</div>'
             f'<div class="display-line">'
-            f'{_weather_icon(loc["condition"])}'
+            f'{_weather_icon(loc["condition"], icon_registry)}'
             f'<span>{loc["high"]}° / {loc["low"]}°</span></div>'
-            f'<div style="font-size:13px;color:{MUTED};margin-top:2px;">Currently {loc["temp"]}°</div>'
             f'{sentence_html}'
-            f'<div class="weather-meta">Sunrise {_esc(loc["sunrise"])} · Sunset {_esc(loc["sunset"])}</div>'
+            f'<div class="weather-meta">Currently {loc["temp"]}° · Sunrise {_esc(loc["sunrise"])} · Sunset {_esc(loc["sunset"])}</div>'
             f'{alert_html}'
             f'{attribution_html}'
             f'</div>'
         )
         parts.append(_section(None, body, show_rule=False))
-    return "".join(parts)
+    return "".join(parts), list(icon_registry.values())
 
 
 def _calendar_html(events: list, *, show_rule: bool = True) -> str:
@@ -407,9 +415,11 @@ def render_email(
         welcome_html = f'<div class="welcome">{_esc(welcome)}</div>'
 
     sections = []
+    weather_icons: list = []
     next_section_rule = weather is None
     if weather:
-        sections.append(_weather_html(weather))
+        weather_html_str, weather_icons = _weather_html(weather)
+        sections.append(weather_html_str)
     if calendar is not None:
         sections.append(_calendar_html(calendar, show_rule=next_section_rule))
         next_section_rule = True
@@ -444,21 +454,29 @@ def render_email(
 </div>
 </body></html>"""
 
-    msg = MIMEMultipart("related")
+    # Outer mixed wrapper keeps Gmail from mangling the related bundle
+    msg = MIMEMultipart("mixed")
     msg["Subject"] = subject
     msg["To"] = recipient
     msg["From"] = recipient  # self-addressed; Gmail API sets the actual sender via OAuth
 
-    html_part = MIMEText(html, "html", "utf-8")
-    msg.attach(html_part)
+    related = MIMEMultipart("related")
+    related.attach(MIMEText(html, "html", "utf-8"))
+
+    # Weather icons as CID attachments (avoids Gmail extracting base64 data URIs)
+    for cid, png_bytes in weather_icons:
+        icon_part = MIMEImage(png_bytes, _subtype="png")
+        icon_part.add_header("Content-ID", f"<{cid}>")
+        icon_part.add_header("Content-Disposition", "inline")
+        related.attach(icon_part)
 
     if photo:
         img_bytes, img_meta = photo
-        img_fmt = img_meta.get("format", "jpeg")  # e.g. "jpeg", "heic", "png"
-        img_ext = "jpg" if img_fmt in ("jpeg", "jpg") else img_fmt
+        img_fmt = img_meta.get("format", "jpeg")
         img_part = MIMEImage(img_bytes, _subtype=img_fmt)
         img_part.add_header("Content-ID", "<onthisday>")
         img_part.add_header("Content-Disposition", "inline")
-        msg.attach(img_part)
+        related.attach(img_part)
 
+    msg.attach(related)
     return msg
