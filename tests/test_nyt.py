@@ -45,7 +45,7 @@ def test_nyt_block_includes_thumbnail_url(requests_mock):
 def test_nyt_block_uses_media_metadata_thumbnail_when_multimedia_missing(requests_mock):
     requests_mock.get("https://api.nytimes.com/svc/mostpopular/v2/viewed/1.json", json=NYT_RESPONSE)
     result = nyt_block("test-key")
-    assert result[1]["thumbnail"] == "https://static.nyt.com/img2-440.jpg"
+    assert result[1]["thumbnail"] == "https://static.nyt.com/img2-210.jpg"
 
 def test_nyt_block_returns_none_on_api_error(requests_mock):
     requests_mock.get("https://api.nytimes.com/svc/mostpopular/v2/viewed/1.json", status_code=429)

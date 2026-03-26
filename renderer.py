@@ -22,16 +22,19 @@ body{margin:0;padding:0;background:#ffffff;color:#121212;font-family:Sohne,"SF P
 a{color:#121212;}
 .wrap{max-width:680px;margin:0 auto;}
 .email{background:#ffffff;overflow:hidden;}
-.header{padding:44px 40px 24px;border-bottom:1px solid #d6d0c6;}
+.header{padding:44px 40px 24px;}
 .date-line{font-size:16px;font-weight:300;line-height:1.35;letter-spacing:-0.01em;color:#474a51;max-width:520px;margin-bottom:12px;}
 .logo{font-size:44px;font-weight:700;line-height:0.96;letter-spacing:-0.03em;color:#121212;margin-bottom:18px;}
 .welcome{max-width:520px;font-size:18px;font-weight:300;line-height:1.38;color:#474a51;}
-.section{padding:24px 40px;border-bottom:1px solid #d6d0c6;}
+.section{padding:0 40px 24px;}
+.section-rule{height:1px;background:#d6d0c6;margin:0 0 24px;}
 .module-place{font-size:20px;font-weight:700;line-height:1.15;letter-spacing:-0.02em;color:#121212;margin-bottom:12px;}
-.weather-card{padding:20px 22px 18px;border:1px solid rgba(214,208,198,0.9);border-radius:18px;background:#fcfbf8;}
-.display-line{font-size:54px;font-weight:300;line-height:0.94;letter-spacing:-0.03em;color:#121212;display:flex;align-items:center;gap:18px;flex-wrap:wrap;}
-.weather-icon{display:inline-flex;align-items:center;justify-content:center;width:72px;height:72px;color:#474a51;flex-shrink:0;}
-.weather-icon svg{width:46px;height:46px;}
+.weather-card{padding:20px 22px 18px;border:1px solid rgba(214,208,198,0.9);border-radius:18px;background:#ffffff;}
+.display-line{font-size:58px;font-weight:300;line-height:0.94;letter-spacing:-0.03em;color:#121212;display:flex;align-items:center;gap:18px;flex-wrap:wrap;}
+.weather-icon{display:inline-flex;align-items:center;justify-content:center;width:84px;height:84px;color:#474a51;flex-shrink:0;}
+.weather-icon svg{width:56px;height:56px;}
+.weather-condition{font-size:17px;font-weight:600;line-height:1.2;color:#121212;margin-top:10px;}
+.weather-meta{font-size:12px;line-height:1.45;color:#6d7178;margin-top:4px;}
 .supporting{font-size:13px;line-height:1.45;color:#474a51;margin-top:8px;}
 .list-row{display:flex;gap:18px;align-items:baseline;padding:0 0 11px;margin:0 0 11px;border-bottom:1px solid rgba(214,208,198,0.55);}
 .list-row:last-child{padding-bottom:0;margin-bottom:0;border-bottom:0;}
@@ -44,7 +47,7 @@ a{color:#121212;}
 .msgmeta{font-size:12px;color:#474a51;line-height:1.45;margin-top:5px;}
 .nyt{display:flex;gap:20px;align-items:flex-start;padding:0 0 16px;margin:0 0 16px;border-bottom:1px solid rgba(214,208,198,0.55);}
 .nyt:last-child{padding-bottom:0;margin-bottom:0;border-bottom:0;}
-.nytthumb{width:84px;height:84px;object-fit:cover;object-position:right center;flex-shrink:0;background:#f5efe5;}
+.nytthumb{width:96px;height:96px;object-fit:cover;object-position:right center;flex-shrink:0;background:#f5efe5;}
 .nythed{font-size:17px;font-weight:700;line-height:1.18;color:#121212;margin-bottom:6px;}
 .nytdek{font-size:13px;color:#474a51;line-height:1.42;}
 .nytbyline{font-size:11px;color:#474a51;line-height:1.4;margin-top:7px;}
@@ -59,7 +62,7 @@ def _label(text: str) -> str:
 
 
 def _section(label: str, content: str) -> str:
-    return f'<div class="section">{_label(label)}{content}</div>'
+    return f'<div class="section"><div class="section-rule"></div>{_label(label)}{content}</div>'
 
 
 def _weather_icon(condition: str) -> str:
@@ -123,8 +126,8 @@ def _weather_html(data: dict) -> str:
             f'<div class="display-line">'
             f'{_weather_icon(loc["condition"])}'
             f'<span>{loc["high"]}° / {loc["low"]}°</span></div>'
-            f'<div class="supporting">'
-            f'{_esc(loc["condition"])} · Sunrise {_esc(loc["sunrise"])} · Sunset {_esc(loc["sunset"])}</div>'
+            f'<div class="weather-condition">{_esc(loc["condition"])}</div>'
+            f'<div class="weather-meta">Sunrise {_esc(loc["sunrise"])} · Sunset {_esc(loc["sunset"])}</div>'
             f'</div>'
         )
         parts.append(_section(label, body))

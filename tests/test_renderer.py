@@ -36,8 +36,12 @@ def test_render_includes_weather_icon():
     html = html_part.get_payload(decode=True).decode()
     assert 'class="weather-icon"' in html
     assert 'class="weather-card"' in html
+    assert 'class="weather-condition"' in html
+    assert 'class="weather-meta"' in html
     assert "<svg" in html
     assert "61° / 44°" in html
+    assert "Overcast" in html
+    assert "Sunrise 6:52am" in html
 
 def test_render_includes_photo_attachment():
     msg = render_email(

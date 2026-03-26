@@ -3,8 +3,8 @@ from __future__ import annotations
 import requests
 
 NYT_URL = "https://api.nytimes.com/svc/mostpopular/v2/viewed/1.json"
-PREFERRED_FORMATS = ["threeByTwoSmallAt2X", "mediumThreeByTwo440", "mediumThreeByTwo210"]
-MEDIA_METADATA_FORMATS = ["mediumThreeByTwo440", "mediumThreeByTwo210", "Standard Thumbnail"]
+PREFERRED_FORMATS = ["mediumThreeByTwo210", "threeByTwoSmallAt2X", "mediumThreeByTwo440"]
+MEDIA_METADATA_FORMATS = ["mediumThreeByTwo210", "mediumThreeByTwo440", "Standard Thumbnail"]
 
 
 def _pick_thumbnail(multimedia: list) -> str | None:
