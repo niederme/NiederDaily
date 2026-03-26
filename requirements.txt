@@ -3,5 +3,6 @@ google-auth-oauthlib>=1.2.0
 google-api-python-client>=2.120.0
 requests>=2.31.0
 pyobjc-framework-AddressBook>=10.0
+pyobjc-framework-Contacts>=10.0
 pyobjc-framework-EventKit>=10.0
 pyobjc-framework-Photos>=10.0

@@ -68,6 +68,58 @@ def needs_reply(messages: list) -> bool:
 
 
 def resolve_contact(handle_id: str) -> str | None:
+    """Resolve a phone number or email to a contact name."""
+    try:
+        import Contacts
+
+        if contacts_access_granted(prompt=False):
+            store = Contacts.CNContactStore.alloc().init()
+            keys = [
+                Contacts.CNContactGivenNameKey,
+                Contacts.CNContactFamilyNameKey,
+                Contacts.CNContactPhoneNumbersKey,
+                Contacts.CNContactEmailAddressesKey,
+            ]
+            request = Contacts.CNContactFetchRequest.alloc().initWithKeysToFetch_(keys)
+            normalized = (
+                handle_id.replace("+1", "")
+                .replace("-", "")
+                .replace(" ", "")
+                .replace("(", "")
+                .replace(")", "")
+            )
+            match = {"name": None}
+
+            def visit(contact, stop_ptr):
+                for labeled_value in contact.phoneNumbers() or []:
+                    value = str(labeled_value.value().stringValue())
+                    candidate = (
+                        value.replace("+1", "")
+                        .replace("-", "")
+                        .replace(" ", "")
+                        .replace("(", "")
+                        .replace(")", "")
+                    )
+                    if candidate == normalized:
+                        first = contact.givenName() or ""
+                        last = contact.familyName() or ""
+                        match["name"] = f"{first} {last}".strip() or None
+                        stop_ptr[0] = True
+                        return
+                for email in contact.emailAddresses() or []:
+                    if str(email.value()).lower() == handle_id.lower():
+                        first = contact.givenName() or ""
+                        last = contact.familyName() or ""
+                        match["name"] = f"{first} {last}".strip() or None
+                        stop_ptr[0] = True
+                        return
+
+            store.enumerateContactsWithFetchRequest_error_usingBlock_(request, None, visit)
+            if match["name"]:
+                return match["name"]
+    except Exception:
+        log.warning("Failed to resolve contact via Contacts for handle %r", handle_id, exc_info=True)
+
     """Resolve a phone number or email to a contact name via AddressBook."""
     try:
         import AddressBook
