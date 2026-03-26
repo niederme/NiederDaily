@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta
+import logging
 import threading
 
 try:
@@ -10,6 +11,9 @@ except ImportError:  # pragma: no cover - exercised in integration environments
     EventKit = None
     NSDate = None
     NSUndefinedDateComponent = None
+
+
+log = logging.getLogger(__name__)
 
 
 def _event_store():
@@ -149,7 +153,11 @@ def _list_color(reminder) -> str | None:
 
 
 def reminders_block(lists: list | None = None) -> dict | None:
-    if EventKit is None or not _has_reminders_access():
+    if EventKit is None:
+        log.warning("Reminders block unavailable: EventKit framework not installed")
+        return None
+    if not _has_reminders_access():
+        log.warning("Reminders block unavailable: reminders access not granted for this runtime")
         return None
 
     try:
@@ -204,4 +212,5 @@ def reminders_block(lists: list | None = None) -> dict | None:
             "upcoming": upcoming[:5],
         }
     except Exception:
+        log.warning("Reminders block failed while reading EventKit reminders", exc_info=True)
         return None

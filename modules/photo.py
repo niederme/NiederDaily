@@ -18,6 +18,12 @@ except ImportError:  # pragma: no cover - exercised in integration environments
 
 log = logging.getLogger(__name__)
 
+
+def _temp_root() -> Path:
+    root = Path.home() / ".niederdaily" / "tmp"
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
 LIST_SCRIPT_TEMPLATE = """\
 set targetMonth to {month}
 set targetDay to {day}
@@ -291,7 +297,7 @@ def _native_photo_block() -> tuple | None:
         text_meta = _asset_text_metadata(asset, resource)
         face_count = _asset_face_count(asset)
 
-        with tempfile.TemporaryDirectory() as tmp_dir:
+        with tempfile.TemporaryDirectory(dir=str(_temp_root())) as tmp_dir:
             filename = resource.originalFilename() or "onthisday.jpeg"
             out_path = Path(tmp_dir) / filename
             url = NSURL.fileURLWithPath_(str(out_path))
@@ -382,7 +388,7 @@ def _applescript_photo_block() -> tuple | None:
 
         chosen = _select_best(photos)
 
-        with tempfile.TemporaryDirectory() as tmp_dir:
+        with tempfile.TemporaryDirectory(dir=str(_temp_root())) as tmp_dir:
             export_script = EXPORT_SCRIPT_TEMPLATE.format(
                 photo_id=chosen["id"], tmp_path=tmp_dir
             )
