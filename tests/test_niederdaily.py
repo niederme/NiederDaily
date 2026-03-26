@@ -68,9 +68,9 @@ def test_preflight_passes_with_optional_warnings(mocker, tmp_path, capsys):
     })
     mocker.patch.object(app, "calendar_access_granted", return_value=True)
     mocker.patch.object(app, "reminders_access_granted", return_value=True)
+    mocker.patch.object(app, "photo_access_granted", return_value=False)
     mocker.patch.object(app, "calendar_block", return_value=None)
     mocker.patch.object(app, "reminders_block", return_value=None)
-    mocker.patch("subprocess.run", return_value=types.SimpleNamespace(returncode=1))
     mocker.patch("modules.messages.DB_PATH", str(tmp_path / "missing-chat.db"))
     mocker.patch.dict("sys.modules", {
         "AddressBook": types.SimpleNamespace(
@@ -120,9 +120,9 @@ def test_preflight_blocks_when_gmail_auth_fails(mocker, tmp_path, capsys):
     })
     mocker.patch.object(app, "calendar_access_granted", return_value=True)
     mocker.patch.object(app, "reminders_access_granted", return_value=True)
+    mocker.patch.object(app, "photo_access_granted", return_value=True)
     mocker.patch.object(app, "calendar_block", return_value=[])
     mocker.patch.object(app, "reminders_block", return_value={"overdue": [], "today": [], "upcoming": []})
-    mocker.patch("subprocess.run", return_value=types.SimpleNamespace(returncode=0))
     mocker.patch("modules.messages.DB_PATH", str(chat_db))
     mocker.patch.dict("sys.modules", {
         "AddressBook": types.SimpleNamespace(

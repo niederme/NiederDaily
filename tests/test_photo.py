@@ -67,3 +67,27 @@ def test_photo_block_returns_none_on_applescript_error(mocker):
     mock_run.return_value = MagicMock(returncode=1, stdout="")
     result = photo_block()
     assert result is None
+
+
+def test_photo_block_prefers_native_result(mocker):
+    native = (b"native-bytes", {"year": "2019", "format": "jpeg"})
+    mocker.patch("modules.photo._native_photo_block", return_value=native)
+    applescript = mocker.patch("modules.photo._applescript_photo_block")
+
+    result = photo_block()
+
+    assert result == native
+    applescript.assert_not_called()
+
+
+def test_photo_block_falls_back_to_applescript_when_native_unavailable(mocker):
+    mocker.patch("modules.photo._native_photo_block", return_value=None)
+    applescript = mocker.patch(
+        "modules.photo._applescript_photo_block",
+        return_value=(b"legacy-bytes", {"year": "2018", "format": "jpg"}),
+    )
+
+    result = photo_block()
+
+    assert result == (b"legacy-bytes", {"year": "2018", "format": "jpg"})
+    applescript.assert_called_once_with()

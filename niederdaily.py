@@ -20,7 +20,7 @@ from modules.calendar import calendar_block, calendar_access_granted
 from modules.welcome import welcome_block
 from modules.reminders import reminders_block, reminders_access_granted
 from modules.messages import messages_block
-from modules.photo import photo_block
+from modules.photo import photo_access_granted, photo_block
 from modules.nyt import nyt_block
 from renderer import render_email
 from sender import send_email
@@ -129,24 +129,14 @@ def preflight():
     )
 
     # Photos
-    import subprocess
-    try:
-        r = subprocess.run(["osascript", "-e", 'tell application "Photos" to return name of first media item'], capture_output=True, text=True, timeout=10)
-        report(
-            "Photos",
-            r.returncode == 0,
-            "",
-            "unavailable — grant Automation access to Photos in System Settings. The newsletter will skip this section until access is granted.",
-            blocking=False,
-        )
-    except subprocess.TimeoutExpired:
-        report(
-            "Photos",
-            False,
-            "",
-            "timed out — grant Automation access to Photos in System Settings. The newsletter will skip this section until access is granted.",
-            blocking=False,
-        )
+    photos_ready = photo_access_granted(prompt=True)
+    report(
+        "Photos",
+        photos_ready,
+        " (Photo Library accessible)",
+        "unavailable — grant Photos access in System Settings → Privacy & Security → Photos. The newsletter will skip this section until access is granted.",
+        blocking=False,
+    )
 
     # Messages / chat.db
     from modules.messages import DB_PATH

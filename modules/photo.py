@@ -3,8 +3,18 @@ from __future__ import annotations
 import logging
 import subprocess
 import tempfile
+import threading
 from datetime import date
+from datetime import datetime
 from pathlib import Path
+
+try:
+    import Photos
+    from Foundation import NSSortDescriptor, NSURL
+except ImportError:  # pragma: no cover - exercised in integration environments
+    Photos = None
+    NSSortDescriptor = None
+    NSURL = None
 
 log = logging.getLogger(__name__)
 
@@ -55,7 +65,158 @@ def _select_best(photos: list) -> dict:
     return min(photos, key=lambda p: p["date"])
 
 
-def photo_block() -> tuple | None:
+def _photo_readable_statuses() -> set[int]:
+    if Photos is None:
+        return set()
+    statuses = {Photos.PHAuthorizationStatusAuthorized}
+    limited = getattr(Photos, "PHAuthorizationStatusLimited", None)
+    if limited is not None:
+        statuses.add(limited)
+    return statuses
+
+
+def photo_access_granted(prompt: bool = False) -> bool:
+    if Photos is None:
+        return False
+
+    if hasattr(Photos.PHPhotoLibrary, "authorizationStatusForAccessLevel_"):
+        status = Photos.PHPhotoLibrary.authorizationStatusForAccessLevel_(Photos.PHAccessLevelReadWrite)
+    else:
+        status = Photos.PHPhotoLibrary.authorizationStatus()
+
+    if status in _photo_readable_statuses():
+        return True
+    if not prompt:
+        return False
+
+    done = threading.Event()
+    result = {"status": status}
+
+    if hasattr(Photos.PHPhotoLibrary, "requestAuthorizationForAccessLevel_handler_"):
+        def completion(new_status):
+            result["status"] = int(new_status)
+            done.set()
+
+        Photos.PHPhotoLibrary.requestAuthorizationForAccessLevel_handler_(Photos.PHAccessLevelReadWrite, completion)
+    elif hasattr(Photos.PHPhotoLibrary, "requestAuthorization_"):
+        def completion(new_status):
+            result["status"] = int(new_status)
+            done.set()
+
+        Photos.PHPhotoLibrary.requestAuthorization_(completion)
+    else:
+        return False
+
+    done.wait(10)
+    return result["status"] in _photo_readable_statuses()
+
+
+def _native_photo_block() -> tuple | None:
+    if Photos is None or not photo_access_granted():
+        return None
+
+    today = date.today()
+    try:
+        options = Photos.PHFetchOptions.alloc().init()
+        options.setSortDescriptors_([NSSortDescriptor.sortDescriptorWithKey_ascending_("creationDate", True)])
+        assets = Photos.PHAsset.fetchAssetsWithMediaType_options_(Photos.PHAssetMediaTypeImage, options)
+
+        photos = []
+        for idx in range(assets.count()):
+            asset = assets.objectAtIndex_(idx)
+            created = asset.creationDate()
+            if created is None:
+                continue
+            created_dt = datetime.fromtimestamp(created.timeIntervalSince1970())
+            if created_dt.month != today.month or created_dt.day != today.day:
+                continue
+
+            photos.append({
+                "id": str(asset.localIdentifier()),
+                "date": created_dt.date().isoformat(),
+                "location": "",
+                "is_favorite": bool(asset.isFavorite()),
+                "face_count": 0,
+                "_asset": asset,
+            })
+
+        if not photos:
+            return None
+
+        chosen = _select_best(photos)
+        asset = chosen["_asset"]
+        resources = list(Photos.PHAssetResource.assetResourcesForAsset_(asset) or [])
+        preferred_types = [
+            getattr(Photos, "PHAssetResourceTypeFullSizePhoto", None),
+            getattr(Photos, "PHAssetResourceTypePhoto", None),
+        ]
+        resource = None
+        for resource_type in preferred_types:
+            if resource_type is None:
+                continue
+            for candidate in resources:
+                if candidate.type() == resource_type:
+                    resource = candidate
+                    break
+            if resource is not None:
+                break
+        if resource is None and resources:
+            resource = resources[0]
+        if resource is None:
+            log.warning("PhotoKit found asset %s but no exportable resources", chosen["id"])
+            return None
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            filename = resource.originalFilename() or "onthisday.jpeg"
+            out_path = Path(tmp_dir) / filename
+            url = NSURL.fileURLWithPath_(str(out_path))
+            request_options = Photos.PHAssetResourceRequestOptions.alloc().init()
+            request_options.setNetworkAccessAllowed_(True)
+
+            done = threading.Event()
+            result = {"error": None}
+
+            def completion(error):
+                result["error"] = error
+                done.set()
+
+            Photos.PHAssetResourceManager.defaultManager().writeDataForAssetResource_toFile_options_completionHandler_(
+                resource,
+                url,
+                request_options,
+                completion,
+            )
+
+            if not done.wait(30):
+                log.warning("PhotoKit export timed out for photo %s", chosen["id"])
+                return None
+            if result["error"] is not None:
+                log.warning("PhotoKit export failed for photo %s: %s", chosen["id"], result["error"])
+                return None
+            if not out_path.exists():
+                log.warning("PhotoKit export reported success but produced no file for photo %s", chosen["id"])
+                return None
+
+            img_bytes = out_path.read_bytes()
+            img_suffix = out_path.suffix.lower().lstrip(".")
+
+        year = chosen["date"][:4] if chosen["date"] else ""
+        return (
+            img_bytes,
+            {
+                "year": year,
+                "date": chosen["date"],
+                "location": chosen["location"],
+                "is_favorite": chosen["is_favorite"],
+                "format": img_suffix or "jpeg",
+            },
+        )
+    except Exception:
+        log.warning("PhotoKit path failed for on-this-day photo block", exc_info=True)
+        return None
+
+
+def _applescript_photo_block() -> tuple | None:
     today = date.today()
     script = LIST_SCRIPT_TEMPLATE.format(month=today.month, day=today.day)
     try:
@@ -120,5 +281,12 @@ def photo_block() -> tuple | None:
         return (img_bytes, meta)
 
     except Exception:
-        log.warning("Failed to build on-this-day photo block", exc_info=True)
+        log.warning("Failed to build on-this-day photo block via AppleScript", exc_info=True)
         return None
+
+
+def photo_block() -> tuple | None:
+    native_result = _native_photo_block()
+    if native_result is not None:
+        return native_result
+    return _applescript_photo_block()
