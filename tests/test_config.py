@@ -9,6 +9,12 @@ def test_load_valid_config(tmp_path):
         "default_location": {"name": "Warwick, NY", "lat": 41.2512, "lon": -74.3607},
         "nyt_api_key": "abc123",
         "anthropic_api_key": "sk-ant-123",
+        "weatherkit": {
+            "team_id": "TEAMID1234",
+            "service_id": "com.niederme.weatherkit",
+            "key_id": "KEYID12345",
+            "key_file": "/fake/path/AuthKey.p8",
+        },
         "reminders_lists": []
     }
     p = tmp_path / "config.json"

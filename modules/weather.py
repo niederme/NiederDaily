@@ -1,205 +1,131 @@
 from __future__ import annotations
 
+import jwt
+import time
 import requests
 from datetime import datetime
-import logging
+from pathlib import Path
 
-WMO_CODES = {
-    0: "Clear Sky", 1: "Mainly Clear", 2: "Partly Cloudy", 3: "Overcast",
-    45: "Foggy", 48: "Icy Fog",
-    51: "Light Drizzle", 53: "Drizzle", 55: "Heavy Drizzle",
-    61: "Light Rain", 63: "Rain", 65: "Heavy Rain",
-    71: "Light Snow", 73: "Snow", 75: "Heavy Snow",
-    77: "Snow Grains",
-    80: "Light Showers", 81: "Showers", 82: "Heavy Showers",
-    85: "Snow Showers", 86: "Heavy Snow Showers",
-    95: "Thunderstorm", 96: "Thunderstorm with Hail", 99: "Heavy Thunderstorm with Hail",
+import anthropic
+
+WEATHERKIT_URL = "https://weatherkit.apple.com/api/v1/weather/en"
+NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+USER_AGENT = "NiederDaily/1.0 (personal newsletter)"
+
+CONDITION_LABELS = {
+    "Clear": "Clear",
+    "MostlyClear": "Mostly Clear",
+    "PartlyCloudy": "Partly Cloudy",
+    "MostlyCloudy": "Mostly Cloudy",
+    "Cloudy": "Cloudy",
+    "Foggy": "Foggy",
+    "Haze": "Hazy",
+    "Smoky": "Smoky",
+    "Breezy": "Breezy",
+    "Windy": "Windy",
+    "Drizzle": "Drizzle",
+    "Rain": "Rain",
+    "HeavyRain": "Heavy Rain",
+    "SunShowers": "Sun Showers",
+    "Thunderstorms": "Thunderstorms",
+    "IsolatedThunderstorms": "Isolated Thunderstorms",
+    "ScatteredThunderstorms": "Scattered Thunderstorms",
+    "StrongStorms": "Strong Storms",
+    "Flurries": "Flurries",
+    "Snow": "Snow",
+    "SunFlurries": "Sun Flurries",
+    "Sleet": "Sleet",
+    "WintryMix": "Wintry Mix",
+    "FreezingDrizzle": "Freezing Drizzle",
+    "FreezingRain": "Freezing Rain",
+    "BlowingSnow": "Blowing Snow",
+    "HeavySnow": "Heavy Snow",
+    "Blizzard": "Blizzard",
+    "BlowingDust": "Blowing Dust",
+    "Frigid": "Frigid",
+    "Hail": "Hail",
+    "Hot": "Hot",
+    "Hurricane": "Hurricane",
+    "TropicalStorm": "Tropical Storm",
 }
 
-NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
-NWS_ALERTS_URL = "https://api.weather.gov/alerts/active"
-USER_AGENT = "NiederDaily/1.0 (personal newsletter)"
-DEFAULT_TRAVEL_CALENDARS = {"Little York", "niederCal", "TripIt"}
-SEVERITY_RANK = {"Extreme": 4, "Severe": 3, "Moderate": 2, "Minor": 1, "Unknown": 0}
-log = logging.getLogger(__name__)
+# No CONDITION_ICONS dict needed — renderer uses existing _weather_icon() SVGs,
+# which keyword-match on the condition string (e.g. "rain", "snow", "thunder", "clear", "fog").
 
 
-def wmo_label(code: int) -> str:
-    return WMO_CODES.get(code, "Unknown")
+def _make_jwt(config: dict) -> str:
+    wk = config["weatherkit"]
+    key = Path(wk["key_file"]).expanduser().read_text()
+    now = int(time.time())
+    return jwt.encode(
+        {"iss": wk["team_id"], "sub": wk["service_id"], "iat": now, "exp": now + 1800},
+        key,
+        algorithm="ES256",
+        headers={"kid": wk["key_id"], "typ": "JWT"},
+    )
 
 
 def _fmt_time(iso: str) -> str:
-    """Convert '2026-03-25T06:52' to '6:52am'."""
+    """Convert RFC 3339 timestamp (e.g. '2026-03-25T06:52:00Z') to '6:52am'."""
     try:
-        dt = datetime.fromisoformat(iso)
+        dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
         return dt.strftime("%-I:%M%p").lower()
     except Exception:
         return iso
 
 
-def _lower_condition(condition: str) -> str:
-    c = condition.lower()
-    if "thunder" in c:
-        return "Stormy today"
-    if "snow" in c or "ice" in c:
-        return "Snowy today"
-    if "rain" in c or "drizzle" in c or "shower" in c:
-        return "Rainy today"
-    if "fog" in c:
-        return "Foggy today"
-    if "overcast" in c:
-        return "Overcast today"
-    if "partly cloudy" in c:
-        return "Partly cloudy today"
-    if "mainly clear" in c:
-        return "Mostly clear today"
-    if "clear" in c or "sun" in c:
-        return "Clear today"
-    return f"{condition} today"
-
-
-def _period_label(hour: int) -> str:
-    if 5 <= hour < 12:
-        return "this morning"
-    if 12 <= hour < 17:
-        return "this afternoon"
-    if 17 <= hour < 22:
-        return "this evening"
-    return "overnight"
-
-
-def _peak_gust_summary(hourly: dict) -> tuple[int, str] | None:
-    times = hourly.get("time", [])
-    gusts = hourly.get("wind_gusts_10m", [])
-    peak = None
-    for iso, gust in zip(times, gusts):
-        if gust is None:
-            continue
-        try:
-            dt = datetime.fromisoformat(iso)
-        except Exception:
-            continue
-        candidate = (round(gust), dt.hour)
-        if peak is None or candidate[0] > peak[0]:
-            peak = candidate
-    if peak is None:
-        return None
-    return peak[0], _period_label(peak[1])
-
-
-def _alert_end_phrase(iso: str | None) -> str | None:
-    if not iso:
-        return None
+def _parse_alert(raw: dict) -> dict:
+    expires_raw = raw.get("eventEndTime", "")
     try:
-        dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
-        return dt.strftime("%-I:%M%p").lower()
+        expires = datetime.fromisoformat(expires_raw).strftime("%a %-I:%M%p").lower()
+        expires = expires[0].upper() + expires[1:]  # capitalize day
     except Exception:
-        return None
+        expires = expires_raw
+    return {
+        "event": raw.get("eventText", "Weather Alert"),
+        "expires": expires,
+        "agency": raw.get("source", ""),
+        "url": raw.get("detailsUrl", ""),
+    }
 
 
-def _top_alert(features: list[dict]) -> dict | None:
-    if not features:
-        return None
-
-    def sort_key(feature: dict):
-        props = feature.get("properties", {})
-        severity = props.get("severity", "Unknown")
-        ends = props.get("ends") or props.get("expires") or ""
-        return (-SEVERITY_RANK.get(severity, 0), ends)
-
-    return sorted(features, key=sort_key)[0]
-
-
-def _fetch_alert_summary(lat: float, lon: float) -> str | None:
+def fetch_weather(lat: float, lon: float, name: str, config: dict) -> dict | None:
     try:
+        token = _make_jwt(config)
         resp = requests.get(
-            NWS_ALERTS_URL,
-            params={"point": f"{lat},{lon}"},
-            headers={"User-Agent": USER_AGENT, "Accept": "application/geo+json"},
+            f"{WEATHERKIT_URL}/{lat}/{lon}",
+            params={
+                "dataSets": "currentWeather,forecastDaily,weatherAlerts",
+                "unitSystem": "i",
+                "countryCode": "US",
+            },
+            headers={"Authorization": f"Bearer {token}"},
             timeout=10,
         )
         resp.raise_for_status()
-        features = resp.json().get("features", [])
-        alert = _top_alert(features)
-        if not alert:
-            return None
-        props = alert.get("properties", {})
-        event = props.get("event")
-        if not event:
-            headline = props.get("headline")
-            if headline:
-                return headline.rstrip(".") + "."
-            return None
-        end_phrase = _alert_end_phrase(props.get("ends") or props.get("expires"))
-        if end_phrase:
-            return f"{event} in effect until {end_phrase}."
-        return f"{event} in effect."
+        data = resp.json()
+
+        current = data["currentWeather"]
+        code = current["conditionCode"]
+        today = data["forecastDaily"]["days"][0]
+        alerts_raw = data.get("weatherAlerts", {}).get("alerts", [])
+
+        def c_to_f(c: float) -> int:
+            return round(c * 9 / 5 + 32)
+
+        return {
+            "location": name,
+            "temp": c_to_f(current["temperature"]),
+            "condition": CONDITION_LABELS.get(code, "Unknown"),
+            "high": c_to_f(today["temperatureMax"]),
+            "low": c_to_f(today["temperatureMin"]),
+            "sunrise": _fmt_time(today["sunrise"]),
+            "sunset": _fmt_time(today["sunset"]),
+            "alerts": [_parse_alert(a) for a in alerts_raw],
+            "sentence": "",  # populated by niederdaily.py after final weather call
+        }
     except Exception:
         return None
-
-
-def _summary_line(condition: str, daily: dict, hourly: dict, alert_summary: str | None = None) -> str:
-    today_phrase = _lower_condition(condition)
-    condition_lower = condition.lower()
-
-    gust_phrase = None
-    peak_gust = _peak_gust_summary(hourly)
-    if peak_gust and peak_gust[0] >= 25:
-        gust_phrase = f"with gusts up to {peak_gust[0]} mph {peak_gust[1]}"
-
-    precip_probs = daily.get("precipitation_probability_max", [])
-    precip_max = round(precip_probs[0]) if precip_probs and precip_probs[0] is not None else None
-    precip_phrase = None
-    if precip_max is not None and precip_max >= 40 and not any(word in condition_lower for word in ["rain", "drizzle", "shower", "storm", "snow"]):
-        precip_phrase = f"Rain chances up to {precip_max}% today."
-
-    today_sentence = None
-    if gust_phrase:
-        today_sentence = f"{today_phrase}, {gust_phrase}."
-    elif precip_phrase:
-        today_sentence = f"{today_phrase}. {precip_phrase}"
-    else:
-        today_sentence = f"{today_phrase}."
-
-    if alert_summary:
-        return f"{alert_summary} {today_sentence}"
-    return today_sentence
-
-
-def fetch_weather(lat: float, lon: float, name: str) -> dict | None:
-    last_error = None
-    for _ in range(2):
-        try:
-            resp = requests.get(OPEN_METEO_URL, params={
-                "latitude": lat, "longitude": lon,
-                "current": "temperature_2m,weathercode",
-                "hourly": "wind_gusts_10m",
-                "daily": "temperature_2m_max,temperature_2m_min,sunrise,sunset,precipitation_probability_max,weathercode",
-                "temperature_unit": "fahrenheit",
-                "timezone": "auto",
-                "forecast_days": 2,
-            }, timeout=10)
-            resp.raise_for_status()
-            data = resp.json()
-            current = data["current"]
-            daily = data["daily"]
-            hourly = data.get("hourly", {})
-            alert_summary = _fetch_alert_summary(lat, lon)
-            return {
-                "location": name,
-                "temp": round(current["temperature_2m"]),
-                "condition": wmo_label(current["weathercode"]),
-                "high": round(daily["temperature_2m_max"][0]),
-                "low": round(daily["temperature_2m_min"][0]),
-                "sunrise": _fmt_time(daily["sunrise"][0]),
-                "sunset": _fmt_time(daily["sunset"][0]),
-                "summary": _summary_line(wmo_label(current["weathercode"]), daily, hourly, alert_summary=alert_summary),
-            }
-        except Exception as exc:
-            last_error = exc
-    log.warning("Weather fetch failed for %s (%s, %s): %s", name, lat, lon, last_error)
-    return None
 
 
 def geocode_location(location_str: str) -> dict | None:
@@ -213,14 +139,38 @@ def geocode_location(location_str: str) -> dict | None:
             return None
         r = results[0]
         return {"lat": float(r["lat"]), "lon": float(r["lon"]), "name": r["display_name"]}
-    except Exception as exc:
-        log.warning("Weather geocode failed for %r: %s", location_str, exc)
+    except Exception:
         return None
+
+
+def weather_sentence(loc: dict, api_key: str) -> str:
+    """Generate a one-sentence Haiku description for a single location dict.
+    Returns "" on any failure — never raises.
+    """
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        prompt = (
+            f"Write a single short sentence describing today's weather for {loc['location']}. "
+            f"Current: {loc['temp']}°F, {loc['condition']}. "
+            f"High {loc['high']}°, Low {loc['low']}°. "
+            f"Be specific and vivid. No greeting. Plain text only."
+        )
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=60,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return resp.content[0].text.strip()
+    except Exception:
+        return ""
+
+
+DEFAULT_TRAVEL_CALENDARS = {"Little York", "niederCal", "TripIt"}
 
 
 def weather_block(config: dict, calendar_events: list) -> dict | None:
     default = config["default_location"]
-    home = fetch_weather(default["lat"], default["lon"], default["name"])
+    home = fetch_weather(default["lat"], default["lon"], default["name"], config)
     if home is None:
         return None
 
@@ -237,9 +187,8 @@ def weather_block(config: dict, calendar_events: list) -> dict | None:
         geo = geocode_location(loc)
         if geo is None:
             continue
-        # Check if it's a different city (rough: compare display name vs default name)
         if default["name"].split(",")[0].lower() not in geo["name"].lower():
-            travel = fetch_weather(geo["lat"], geo["lon"], geo["name"].split(",")[0].strip())
+            travel = fetch_weather(geo["lat"], geo["lon"], geo["name"].split(",")[0].strip(), config)
             travel_city = geo["name"].split(",")[0].strip()
             break
 
