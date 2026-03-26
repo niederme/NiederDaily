@@ -38,3 +38,16 @@ def test_welcome_block_passes_travel_city_to_prompt(mocker):
     call_args = mock_client.messages.create.call_args
     prompt_text = call_args.kwargs["messages"][0]["content"]
     assert "New York" in prompt_text
+
+
+def test_welcome_block_passes_calendar_name_notes_to_prompt(mocker):
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = MagicMock(
+        content=[MagicMock(text="Danielle is apparently what DC means, which does improve the odds of understanding my own schedule.")]
+    )
+    mocker.patch("modules.welcome.anthropic.Anthropic", return_value=mock_client)
+    events = [{"time": "9:15am", "title": "DC- Volunteer for Traveling Trunks: James", "all_day": False}]
+    welcome_block("sk-ant-test", weather_data=WEATHER, calendar_events=events)
+    call_args = mock_client.messages.create.call_args
+    prompt_text = call_args.kwargs["messages"][0]["content"]
+    assert "DC means Danielle" in prompt_text

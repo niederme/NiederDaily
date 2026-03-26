@@ -84,6 +84,7 @@ def test_render_skips_none_sections_without_error():
     html_part = next(p for p in msg.get_payload() if p.get_content_type() == "text/html")
     html = html_part.get_payload(decode=True).decode()
     assert "NiederDaily" in html
+    assert f'color:{__import__("renderer").ACCENT};' in html
 
 def test_render_welcome_appears_in_header():
     msg = render_email(

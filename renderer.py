@@ -286,7 +286,7 @@ def render_email(
 <div class="email">
   <div class="header">
     <div class="date-line">{date_str}</div>
-    <div class="logo">NiederDaily</div>
+    <div class="logo">Nieder<span style="color:{ACCENT};">Daily</span></div>
     {welcome_html}
   </div>
   {"".join(sections)}
