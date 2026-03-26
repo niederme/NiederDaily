@@ -69,6 +69,8 @@ A fresh JWT is generated on every newsletter run (no caching needed for once-dai
 - Claims: `iss=team_id`, `sub=service_id`, `iat=now`, `exp=now+30min`
 - Signed with the private key loaded from the `.p8` file
 
+**Clock sync note:** Apple validates `iat` against server time. macOS syncs via NTP by default; no action needed for launchd runs. If ever running in CI or a VM, verify NTP is active to avoid 401s from clock skew.
+
 Dependency: `PyJWT` with `cryptography` extras (added to `requirements.txt`).
 
 ### API Call
@@ -86,11 +88,11 @@ GET https://weatherkit.apple.com/api/v1/weather/en/{lat}/{lon}
 
 | Field | Source | Notes |
 |-------|--------|-------|
-| `temp` | `currentWeather.temperature` | Fahrenheit (imperial), rounded |
+| `temp` | `currentWeather.temperature` | Fahrenheit float → `round()` → int |
 | `condition` | `currentWeather.conditionCode` | mapped to display label via `CONDITION_LABELS` |
 | `icon` | `currentWeather.conditionCode` | mapped to emoji via `CONDITION_ICONS` |
-| `high` | `forecastDaily.days[0].temperatureMax` | Fahrenheit, rounded |
-| `low` | `forecastDaily.days[0].temperatureMin` | Fahrenheit, rounded |
+| `high` | `forecastDaily.days[0].temperatureMax` | Fahrenheit float → `round()` → int |
+| `low` | `forecastDaily.days[0].temperatureMin` | Fahrenheit float → `round()` → int |
 | `sunrise` | `forecastDaily.days[0].sunrise` | RFC 3339 timestamp → "H:MMam" |
 | `sunset` | `forecastDaily.days[0].sunset` | RFC 3339 timestamp → "H:MMpm" |
 | `alerts` | `weatherAlerts.alerts` | list, may be empty; key may be absent (unsupported regions) |
@@ -256,7 +258,7 @@ Weather
 - **Alert banner** (only when `loc["alerts"]` is non-empty): rendered below metadata
   - `⚠ {event}` as a linked anchor (`href=alert["url"]`)
   - Expiry and agency in smaller text below
-  - Styled with amber/red accent (e.g. `color: #c0392b`)
+  - Styled with inline CSS amber/red accent (e.g. `style="color:#c0392b;font-weight:600;"`) — email clients require all styles to be inline; no `<style>` blocks
 - **Attribution**: small linked "Weather" line at bottom per Apple requirement (`href="https://weatherkit.apple.com/legal-attribution.html"`)
 
 ---
