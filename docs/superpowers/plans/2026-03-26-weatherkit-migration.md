@@ -979,10 +979,17 @@ git commit -m "feat: update weather renderer for WeatherKit — icon, sentence, 
 
 - [ ] **Step 1: Add the sentence call after final weather result**
 
-In `niederdaily.py`, after the two `weather_block` calls (lines 37–42), add:
+First, update the import at the top of `niederdaily.py` (line 18):
+```python
+# Before:
+from modules.weather import weather_block
+# After:
+from modules.weather import weather_block, weather_sentence
+```
+
+Then, after the two `weather_block` calls (lines 37–42), add:
 
 ```python
-from modules.weather import weather_block, weather_sentence  # update existing import at top
 
 # (existing lines 37-42 unchanged)
 weather = _safe(weather_block, conf, calendar_events=[])
@@ -1086,9 +1093,10 @@ Verify in the received email:
 - If there are active alerts in your area: amber alert banner with link
 - "Weather" attribution link at bottom of weather section
 
-- [ ] **Step 4: Final commit**
+- [ ] **Step 4: Final commit** (no code changes — just confirm clean state)
 
 ```bash
-git add -A
-git commit -m "chore: WeatherKit migration complete"
+git status
+# Should be clean. If any tracked files are modified, stage and commit them:
+# git add <specific files only — never add .p8 key files>
 ```
