@@ -329,8 +329,10 @@ def _photo_html(photo: tuple, *, show_rule: bool = True) -> str:
     meta_bits = []
     if meta.get("location"):
         meta_bits.append(_esc(meta["location"]))
-    if meta.get("filename"):
-        meta_bits.append(_esc(meta["filename"]))
+    face_count = meta.get("face_count") or 0
+    if face_count:
+        noun = "face" if face_count == 1 else "faces"
+        meta_bits.append(f"{face_count} {noun}")
     if meta.get("is_favorite"):
         meta_bits.append("Favorite")
     meta_line = " · ".join(meta_bits)
@@ -348,7 +350,6 @@ def _photo_html(photo: tuple, *, show_rule: bool = True) -> str:
             "date": meta.get("date"),
             "year": meta.get("year"),
             "location": meta.get("location"),
-            "filename": meta.get("filename"),
             "title": meta.get("title"),
             "favorite": bool(meta.get("is_favorite")),
         },

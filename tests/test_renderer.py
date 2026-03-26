@@ -8,7 +8,7 @@ WEATHER = {"locations": [{"location": "Warwick, NY", "temp": 54, "condition": "O
 CALENDAR = [{"time": "9:00am", "title": "Weekly sync", "location": "Zoom", "calendar": "Personal", "identifier": "event-123", "calendar_color": "#0088FF", "all_day": False}]
 REMINDERS = {"overdue": [{"title": "Call accountant", "due": "2026-03-20", "list": "House Wish List", "identifier": "reminder-123", "list_color": "#0088FF"}], "today": [], "upcoming": []}
 MESSAGES = [{"name": "Mom", "handle": "+15555550101", "is_contact": True, "count": 4, "last_time": "8:14pm", "needs_reply": True}]
-PHOTO = (b'\xff\xd8\xff' + b'\x00' * 100, {"year": "2019", "date": "2019-03-25", "location": "Warwick, NY", "is_favorite": True, "title": "Downtown selfie", "description": "Flash photo after drinks.", "keywords": ["friends", "night"], "filename": "IMG_1234.JPG"})
+PHOTO = (b'\xff\xd8\xff' + b'\x00' * 100, {"year": "2019", "date": "2019-03-25", "location": "Warwick, NY", "is_favorite": True, "title": "Downtown selfie", "description": "Flash photo after drinks.", "keywords": ["friends", "night"], "filename": "IMG_1234.JPG", "face_count": 2})
 NYT = [{"title": "Story One", "abstract": "Things happened.", "byline": "By Reporter One", "url": "https://nytimes.com/1", "thumbnail": None}]
 
 def test_render_returns_mime_message():
@@ -68,7 +68,8 @@ def test_render_includes_photo_attachment():
     assert "March 25, 2019" in html
     assert "Open in Photos" in html
     assert "Flash photo after drinks." in html
-    assert "IMG_1234.JPG" in html
+    assert "2 faces" in html
+    assert "IMG_1234.JPG" not in html
     assert "Keywords: friends, night" in html
     assert "photo-caption" not in html
     payloads = msg.get_payload()

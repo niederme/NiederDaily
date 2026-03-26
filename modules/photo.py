@@ -171,6 +171,23 @@ def _asset_text_metadata(asset, resource) -> dict:
     return metadata
 
 
+def _asset_face_count(asset) -> int:
+    for attr in ("faceRegions",):
+        try:
+            value = getattr(asset, attr, None)
+            if value is None:
+                continue
+            regions = value() if callable(value) else value
+            if regions is None:
+                continue
+            if hasattr(regions, "count"):
+                return int(regions.count())
+            return len(list(regions))
+        except Exception:
+            continue
+    return 0
+
+
 def _photo_readable_statuses() -> set[int]:
     if Photos is None:
         return set()
@@ -272,6 +289,7 @@ def _native_photo_block() -> tuple | None:
             log.warning("PhotoKit found asset %s but no exportable resources", chosen["id"])
             return None
         text_meta = _asset_text_metadata(asset, resource)
+        face_count = _asset_face_count(asset)
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             filename = resource.originalFilename() or "onthisday.jpeg"
@@ -320,6 +338,7 @@ def _native_photo_block() -> tuple | None:
                 "description": text_meta["description"],
                 "keywords": text_meta["keywords"],
                 "filename": text_meta["filename"],
+                "face_count": face_count,
                 "format": img_suffix or "jpeg",
             },
         )
@@ -395,6 +414,7 @@ def _applescript_photo_block() -> tuple | None:
             "description": None,
             "keywords": [],
             "filename": exported.name,
+            "face_count": chosen.get("face_count", 0),
             "format": img_suffix or "jpeg",
         }
         return (img_bytes, meta)
