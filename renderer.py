@@ -28,8 +28,10 @@ a{color:#121212;}
 .welcome{max-width:520px;font-size:18px;font-weight:300;line-height:1.38;color:#474a51;}
 .section{padding:24px 40px;border-bottom:1px solid #d6d0c6;}
 .module-place{font-size:20px;font-weight:700;line-height:1.15;letter-spacing:-0.02em;color:#121212;margin-bottom:12px;}
+.weather-card{padding:20px 22px 18px;border:1px solid rgba(214,208,198,0.9);border-radius:18px;background:#fcfbf8;}
 .display-line{font-size:54px;font-weight:300;line-height:0.94;letter-spacing:-0.03em;color:#121212;display:flex;align-items:center;gap:18px;flex-wrap:wrap;}
-.weather-icon{display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;color:#474a51;flex-shrink:0;}
+.weather-icon{display:inline-flex;align-items:center;justify-content:center;width:72px;height:72px;color:#474a51;flex-shrink:0;}
+.weather-icon svg{width:46px;height:46px;}
 .supporting{font-size:13px;line-height:1.45;color:#474a51;margin-top:8px;}
 .list-row{display:flex;gap:18px;align-items:baseline;padding:0 0 11px;margin:0 0 11px;border-bottom:1px solid rgba(214,208,198,0.55);}
 .list-row:last-child{padding-bottom:0;margin-bottom:0;border-bottom:0;}
@@ -115,12 +117,14 @@ def _weather_html(data: dict) -> str:
     for loc in data["locations"]:
         label = "Weather"
         body = (
+            f'<div class="weather-card">'
             f'<div class="module-place">{_esc(loc["location"])}</div>'
             f'<div class="display-line">'
             f'{_weather_icon(loc["condition"])}'
-            f'<span>{loc["low"]}° / {loc["high"]}°</span></div>'
+            f'<span>{loc["high"]}° / {loc["low"]}°</span></div>'
             f'<div class="supporting">'
             f'{_esc(loc["condition"])} · Sunrise {_esc(loc["sunrise"])} · Sunset {_esc(loc["sunset"])}</div>'
+            f'</div>'
         )
         parts.append(_section(label, body))
     return "".join(parts)
@@ -128,7 +132,7 @@ def _weather_html(data: dict) -> str:
 
 def _calendar_html(events: list) -> str:
     if not events:
-        return _section("CALENDAR", '<div class="supporting">Nothing on the calendar.</div>')
+        return _section("Calendar", '<div class="supporting">Nothing on the calendar.</div>')
     rows = []
     for e in events:
         time_str = _esc(e.get("time") or "All day")
@@ -138,7 +142,7 @@ def _calendar_html(events: list) -> str:
             f'<span class="list-time">{time_str}</span>'
             f'<div class="list-main">{_esc(e["title"])}{loc}</div></div>'
         )
-    return _section("CALENDAR", "".join(rows))
+    return _section("Calendar", "".join(rows))
 
 
 def _reminders_html(data: dict) -> str:
@@ -162,8 +166,8 @@ def _reminders_html(data: dict) -> str:
         badge = f'<span style="display:inline-block;min-width:56px;color:{MUTED};font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">{due}</span>'
         rows.append(f'<div class="list-row"><span class="list-time">{badge}</span><div class="list-main">{_esc(r["title"])}</div></div>')
     if not rows:
-        return _section("REMINDERS", '<div class="supporting">All clear.</div>')
-    return _section("REMINDERS", "".join(rows))
+        return _section("Reminders", '<div class="supporting">All clear.</div>')
+    return _section("Reminders", "".join(rows))
 
 
 def _messages_html(threads: list) -> str:
@@ -176,7 +180,7 @@ def _messages_html(threads: list) -> str:
             f'<div class="msgmeta">{t["count"]} message{"s" if t["count"] != 1 else ""} · last {_esc(t["last_time"])}</div></div>'
             f'{badge}</div>'
         )
-    return _section("MESSAGES", "".join(rows))
+    return _section("Messages", "".join(rows))
 
 
 def _nyt_html(stories: list) -> str:
@@ -190,7 +194,7 @@ def _nyt_html(stories: list) -> str:
             f'<a href="{_esc(s["url"])}" style="color:{INK};text-decoration:none;">{_esc(s["title"])}</a></div>'
             f'<div class="nytdek">{_esc(s["abstract"])}</div></div>{img}</div>'
         )
-    return _section("IN THE NEWS", "".join(rows))
+    return _section("In the News", "".join(rows))
 
 
 def render_email(

@@ -35,8 +35,9 @@ def test_render_includes_weather_icon():
     html_part = next(p for p in msg.get_payload() if p.get_content_type() == "text/html")
     html = html_part.get_payload(decode=True).decode()
     assert 'class="weather-icon"' in html
+    assert 'class="weather-card"' in html
     assert "<svg" in html
-    assert "44° / 61°" in html
+    assert "61° / 44°" in html
 
 def test_render_includes_photo_attachment():
     msg = render_email(
