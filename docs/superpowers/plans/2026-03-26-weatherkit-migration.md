@@ -90,6 +90,30 @@ def test_config_requires_weatherkit_subkeys(tmp_path):
     }))
     with pytest.raises(ConfigError, match="weatherkit"):
         load_config(str(cfg_file))
+
+def test_config_rejects_blank_weatherkit_subkeys(tmp_path):
+    cfg_file = tmp_path / "config.json"
+    cfg_file.write_text(json.dumps({
+        "recipient_email": "a@b.com",
+        "default_location": {"name": "X", "lat": 0.0, "lon": 0.0},
+        "nyt_api_key": "k",
+        "anthropic_api_key": "k",
+        "weatherkit": {"team_id": "", "service_id": "com.x", "key_id": "K", "key_file": "/p"},
+    }))
+    with pytest.raises(ConfigError, match="weatherkit"):
+        load_config(str(cfg_file))
+
+def test_config_rejects_fill_in_weatherkit_subkeys(tmp_path):
+    cfg_file = tmp_path / "config.json"
+    cfg_file.write_text(json.dumps({
+        "recipient_email": "a@b.com",
+        "default_location": {"name": "X", "lat": 0.0, "lon": 0.0},
+        "nyt_api_key": "k",
+        "anthropic_api_key": "k",
+        "weatherkit": {"team_id": "FILL_IN", "service_id": "com.x", "key_id": "K", "key_file": "/p"},
+    }))
+    with pytest.raises(ConfigError, match="weatherkit"):
+        load_config(str(cfg_file))
 ```
 
 - [ ] **Step 2: Run to verify it fails**
@@ -131,6 +155,8 @@ def load_config(path: str = None) -> dict:
     for sub in REQUIRED_WEATHERKIT_KEYS:
         if sub not in wk:
             raise ConfigError(f"Missing required weatherkit config key: {sub}")
+        if not wk[sub] or wk[sub] == "FILL_IN":
+            raise ConfigError(f"weatherkit config key not filled in: {sub}")
     return cfg
 ```
 
@@ -382,16 +408,9 @@ def test_condition_label_known_code():
     assert CONDITION_LABELS["Thunderstorms"] == "Thunderstorms"
     assert CONDITION_LABELS["Blizzard"] == "Blizzard"
 
-def test_condition_icon_known_code():
-    from modules.weather import CONDITION_ICONS
-    assert CONDITION_ICONS["PartlyCloudy"] == "⛅"
-    assert CONDITION_ICONS["Clear"] == "☀️"
-    assert CONDITION_ICONS["Hurricane"] == "🌀"
-
 def test_condition_unknown_code_falls_back():
-    from modules.weather import CONDITION_LABELS, CONDITION_ICONS
+    from modules.weather import CONDITION_LABELS
     assert CONDITION_LABELS.get("XyzUnknown", "Unknown") == "Unknown"
-    assert CONDITION_ICONS.get("XyzUnknown", "🌡") == "🌡"
 
 # ── fetch_weather tests ───────────────────────────────────────────────────────
 
@@ -407,7 +426,6 @@ def test_fetch_weather_returns_structured_data(requests_mock):
     assert result["location"] == "Warwick, NY"
     assert result["temp"] == 54
     assert result["condition"] == "Partly Cloudy"
-    assert result["icon"] == "⛅"
     assert result["high"] == 61
     assert result["low"] == 44
     assert result["sunrise"] == "6:52am"
@@ -619,42 +637,10 @@ CONDITION_LABELS = {
     "TropicalStorm": "Tropical Storm",
 }
 
-CONDITION_ICONS = {
-    "Clear": "☀️",
-    "MostlyClear": "🌤",
-    "PartlyCloudy": "⛅",
-    "MostlyCloudy": "🌥",
-    "Cloudy": "☁️",
-    "Foggy": "🌫",
-    "Haze": "🌫",
-    "Smoky": "🌫",
-    "Breezy": "🌬",
-    "Windy": "💨",
-    "Drizzle": "🌦",
-    "Rain": "🌧",
-    "HeavyRain": "🌧",
-    "SunShowers": "🌦",
-    "Thunderstorms": "⛈",
-    "IsolatedThunderstorms": "⛈",
-    "ScatteredThunderstorms": "⛈",
-    "StrongStorms": "⛈",
-    "Flurries": "🌨",
-    "Snow": "❄️",
-    "SunFlurries": "🌨",
-    "Sleet": "🌨",
-    "WintryMix": "🌨",
-    "FreezingDrizzle": "🌧",
-    "FreezingRain": "🌧",
-    "BlowingSnow": "🌨",
-    "HeavySnow": "❄️",
-    "Blizzard": "🌨",
-    "BlowingDust": "🌬",
-    "Frigid": "🥶",
-    "Hail": "🌨",
-    "Hot": "🥵",
-    "Hurricane": "🌀",
-    "TropicalStorm": "🌀",
-}
+# Note: no CONDITION_ICONS dict needed — renderer uses existing _weather_icon() SVGs,
+# which keyword-match on the condition string (e.g. "rain", "snow", "thunder", "clear", "fog").
+# WeatherKit label strings ("Rain", "Snow", "Thunderstorms", "Clear", "Foggy", etc.)
+# match the existing patterns without any changes to _weather_icon().
 
 
 def _make_jwt(config: dict) -> str:
@@ -719,7 +705,6 @@ def fetch_weather(lat: float, lon: float, name: str, config: dict) -> dict | Non
             "location": name,
             "temp": round(current["temperature"]),
             "condition": CONDITION_LABELS.get(code, "Unknown"),
-            "icon": CONDITION_ICONS.get(code, "🌡"),
             "high": round(today["temperatureMax"]),
             "low": round(today["temperatureMin"]),
             "sunrise": _fmt_time(today["sunrise"]),
@@ -821,8 +806,16 @@ git commit -m "feat: replace Open-Meteo with WeatherKit REST API"
 
 ## Task 5: Update renderer
 
+The real renderer (`renderer.py` lines 187–204) uses:
+- CSS classes (`.weather-card`, `.weather-summary`, `.weather-meta`) — not inline styles
+- SVG icons via `_weather_icon(loc["condition"])` — not emoji; condition string keyword-matches already work with WeatherKit label strings
+- `_section(None, body, show_rule=False)` — no label, no divider rule
+- `loc["summary"]` for the description — rename to `loc["sentence"]`
+
+Changes needed: rename `summary` → `sentence`, add alert banner + attribution (new elements, inline styles), keep everything else intact.
+
 **Files:**
-- Modify: `renderer.py`
+- Modify: `renderer.py` (`_weather_html` only — lines 187–204)
 - Create: `tests/test_renderer_weather.py`
 
 - [ ] **Step 1: Write the failing tests**
@@ -836,7 +829,6 @@ BASE_LOC = {
     "location": "Warwick, NY",
     "temp": 54,
     "condition": "Partly Cloudy",
-    "icon": "⛅",
     "high": 61,
     "low": 44,
     "sunrise": "6:52am",
@@ -845,28 +837,37 @@ BASE_LOC = {
     "sentence": "A partly cloudy afternoon with highs in the low 60s.",
 }
 
-def test_weather_html_shows_icon_and_temp():
+def test_weather_html_shows_location():
     html = _weather_html({"locations": [BASE_LOC]})
-    assert "⛅" in html
-    assert "54°" in html
+    assert "Warwick, NY" in html
+
+def test_weather_html_shows_high_low():
+    html = _weather_html({"locations": [BASE_LOC]})
+    assert "61°" in html
+    assert "44°" in html
 
 def test_weather_html_shows_sentence():
     html = _weather_html({"locations": [BASE_LOC]})
     assert "A partly cloudy afternoon" in html
+    assert 'weather-summary' in html
 
-def test_weather_html_omits_sentence_when_empty():
+def test_weather_html_omits_sentence_div_when_empty():
     loc = {**BASE_LOC, "sentence": ""}
     html = _weather_html({"locations": [loc]})
-    assert "sentence" not in html  # key shouldn't leak into HTML
+    assert "weather-summary" not in html
 
-def test_weather_html_shows_metadata():
+def test_weather_html_shows_sunrise_sunset():
     html = _weather_html({"locations": [BASE_LOC]})
-    assert "High 61°" in html
-    assert "Low 44°" in html
     assert "6:52am" in html
     assert "7:31pm" in html
 
-def test_weather_html_no_alert_banner_when_empty():
+def test_weather_html_no_rule_or_label():
+    """section-rule div and section label must not appear — show_rule=False, label=None."""
+    html = _weather_html({"locations": [BASE_LOC]})
+    assert "section-rule" not in html
+    assert "WEATHER ·" not in html
+
+def test_weather_html_no_alert_when_empty():
     html = _weather_html({"locations": [BASE_LOC]})
     assert "⚠" not in html
 
@@ -884,7 +885,8 @@ def test_weather_html_shows_alert_banner():
     assert "Thu 6:00pm" in html
     assert "NWS Chicago" in html
 
-def test_weather_html_alert_uses_inline_styles():
+def test_weather_html_alert_uses_inline_styles_not_class():
+    """Alert banner has no CSS class — uses inline styles (email client compatibility)."""
     loc = {**BASE_LOC, "alerts": [{
         "event": "Winter Storm Warning",
         "expires": "Fri 9:00am",
@@ -892,20 +894,13 @@ def test_weather_html_alert_uses_inline_styles():
         "url": "https://alerts.weather.gov/example",
     }]}
     html = _weather_html({"locations": [loc]})
-    # Inline styles required — no class references for alert styling
     assert 'style=' in html
     assert 'class="alert' not in html
 
 def test_weather_html_shows_attribution():
     html = _weather_html({"locations": [BASE_LOC]})
     assert "weatherkit.apple.com/legal-attribution.html" in html
-    assert "Weather" in html
-
-def test_weather_html_does_not_show_bare_condition_label():
-    """Condition label is used by welcome.py but not rendered in the weather block."""
-    html = _weather_html({"locations": [BASE_LOC]})
-    # The big line should show icon+temp, not the text label
-    assert "Partly Cloudy" not in html
+    assert ">Weather<" in html
 ```
 
 - [ ] **Step 2: Run to verify tests fail**
@@ -914,60 +909,58 @@ def test_weather_html_does_not_show_bare_condition_label():
 pytest tests/test_renderer_weather.py -v
 ```
 
-Expected: most FAIL — current renderer shows condition label, no icon, no sentence, no alerts, no attribution.
+Expected: `test_weather_html_no_rule_or_label` PASS (already correct), `test_weather_html_shows_sentence` FAIL (uses `summary` key), alert/attribution tests FAIL (not yet added).
 
 - [ ] **Step 3: Update `_weather_html()` in `renderer.py`**
 
-Replace the existing `_weather_html` function (lines 42–53) with:
+Replace the existing `_weather_html` function (lines 187–204) with:
 
 ```python
 def _weather_html(data: dict) -> str:
     parts = []
     for loc in data["locations"]:
-        label = f"WEATHER · {loc['location'].upper()}"
-
-        # Big line: icon + temp
-        body = (
-            f'<div style="font-size:32px;font-weight:200;color:#1a1a1a;letter-spacing:-0.02em;">'
-            f'{_esc(loc["icon"])} {loc["temp"]}°</div>'
-        )
-
-        # Sentence (home location only; empty string for travel)
+        # sentence replaces summary — same CSS class, same position
+        sentence_html = ""
         if loc.get("sentence"):
-            body += (
-                f'<div style="font-size:14px;color:#555;margin-top:6px;line-height:1.4;">'
-                f'{_esc(loc["sentence"])}</div>'
-            )
+            sentence_html = f'<div class="weather-summary">{_esc(loc["sentence"])}</div>'
 
-        # Metadata: High/Low · Sunrise · Sunset
-        body += (
-            f'<div style="font-size:12px;color:#999;margin-top:4px;">'
-            f'High {loc["high"]}° · Low {loc["low"]}° · '
-            f'Sunrise {_esc(loc["sunrise"])} · Sunset {_esc(loc["sunset"])}</div>'
-        )
-
-        # Alert banner (only when active)
+        # alert banner (new — inline styles, no CSS class)
+        alert_html = ""
         for alert in loc.get("alerts", []):
-            body += (
-                f'<div style="margin-top:10px;padding:8px 10px;border-left:3px solid #c0392b;">'
-                f'<div style="font-size:12px;font-weight:600;color:#c0392b;">'
-                f'⚠ <a href="{_esc(alert["url"])}" style="color:#c0392b;text-decoration:none;">'
+            alert_html += (
+                f'<div style="margin-top:10px;padding:8px 0;border-top:1px solid rgba(214,208,198,0.6);">'
+                f'<div style="font-size:12px;font-weight:600;color:#ff453a;">'
+                f'⚠ <a href="{_esc(alert["url"])}" style="color:#ff453a;text-decoration:none;">'
                 f'{_esc(alert["event"])} →</a></div>'
-                f'<div style="font-size:11px;color:#999;margin-top:2px;">'
+                f'<div style="font-size:11px;color:{MUTED};margin-top:2px;">'
                 f'Until {_esc(alert["expires"])} · {_esc(alert["agency"])}</div>'
                 f'</div>'
             )
 
-        # Attribution (Apple requirement)
-        body += (
-            f'<div style="font-size:10px;color:#ccc;margin-top:8px;">'
+        # attribution (Apple requirement — inline styles)
+        attribution_html = (
+            f'<div style="font-size:10px;color:#9aa0a6;margin-top:8px;">'
             f'<a href="https://weatherkit.apple.com/legal-attribution.html" '
-            f'style="color:#ccc;text-decoration:none;">Weather</a></div>'
+            f'style="color:#9aa0a6;text-decoration:none;">Weather</a></div>'
         )
 
-        parts.append(_section(label, body))
+        body = (
+            f'<div class="weather-card">'
+            f'<div class="module-place">{_esc(loc["location"])}</div>'
+            f'<div class="display-line">'
+            f'{_weather_icon(loc["condition"])}'
+            f'<span>{loc["high"]}° / {loc["low"]}°</span></div>'
+            f'{sentence_html}'
+            f'<div class="weather-meta">Sunrise {_esc(loc["sunrise"])} · Sunset {_esc(loc["sunset"])}</div>'
+            f'{alert_html}'
+            f'{attribution_html}'
+            f'</div>'
+        )
+        parts.append(_section(None, body, show_rule=False))  # preserve: no rule, no label
     return "".join(parts)
 ```
+
+Note: alert accent color uses `#ff453a` (the existing `ACCENT` constant) rather than `#c0392b` to stay on-palette.
 
 - [ ] **Step 4: Run tests**
 
@@ -989,7 +982,7 @@ Expected: all PASS.
 
 ```bash
 git add renderer.py tests/test_renderer_weather.py
-git commit -m "feat: update weather renderer for WeatherKit — icon, sentence, alerts, attribution"
+git commit -m "feat: update weather renderer — sentence, alert banner, attribution"
 ```
 
 ---
