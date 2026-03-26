@@ -1,5 +1,6 @@
 import requests
 from datetime import datetime
+from typing import Optional
 
 WMO_CODES = {
     0: "Clear Sky", 1: "Mainly Clear", 2: "Partly Cloudy", 3: "Overcast",
@@ -31,7 +32,7 @@ def _fmt_time(iso: str) -> str:
         return iso
 
 
-def fetch_weather(lat: float, lon: float, name: str) -> dict | None:
+def fetch_weather(lat: float, lon: float, name: str) -> Optional[dict]:
     try:
         resp = requests.get(OPEN_METEO_URL, params={
             "latitude": lat, "longitude": lon,
@@ -58,7 +59,7 @@ def fetch_weather(lat: float, lon: float, name: str) -> dict | None:
         return None
 
 
-def geocode_location(location_str: str) -> dict | None:
+def geocode_location(location_str: str) -> Optional[dict]:
     try:
         resp = requests.get(NOMINATIM_URL, params={
             "q": location_str, "format": "json", "limit": 1,
@@ -73,7 +74,7 @@ def geocode_location(location_str: str) -> dict | None:
         return None
 
 
-def weather_block(config: dict, calendar_events: list) -> dict | None:
+def weather_block(config: dict, calendar_events: list) -> Optional[dict]:
     default = config["default_location"]
     home = fetch_weather(default["lat"], default["lon"], default["name"])
     if home is None:
