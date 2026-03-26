@@ -1,6 +1,56 @@
 import pytest
 
+from config import load_config, ConfigError
 from modules.weather import fetch_weather, geocode_location, wmo_label, weather_block
+import json
+
+def test_config_requires_weatherkit_keys(tmp_path):
+    cfg_file = tmp_path / "config.json"
+    cfg_file.write_text(json.dumps({
+        "recipient_email": "a@b.com",
+        "default_location": {"name": "X", "lat": 0.0, "lon": 0.0},
+        "nyt_api_key": "k",
+        "anthropic_api_key": "k",
+        # weatherkit block intentionally missing
+    }))
+    with pytest.raises(ConfigError, match="weatherkit"):
+        load_config(str(cfg_file))
+
+def test_config_requires_weatherkit_subkeys(tmp_path):
+    cfg_file = tmp_path / "config.json"
+    cfg_file.write_text(json.dumps({
+        "recipient_email": "a@b.com",
+        "default_location": {"name": "X", "lat": 0.0, "lon": 0.0},
+        "nyt_api_key": "k",
+        "anthropic_api_key": "k",
+        "weatherkit": {"team_id": "T"},  # missing service_id, key_id, key_file
+    }))
+    with pytest.raises(ConfigError, match="weatherkit"):
+        load_config(str(cfg_file))
+
+def test_config_rejects_blank_weatherkit_subkeys(tmp_path):
+    cfg_file = tmp_path / "config.json"
+    cfg_file.write_text(json.dumps({
+        "recipient_email": "a@b.com",
+        "default_location": {"name": "X", "lat": 0.0, "lon": 0.0},
+        "nyt_api_key": "k",
+        "anthropic_api_key": "k",
+        "weatherkit": {"team_id": "", "service_id": "com.x", "key_id": "K", "key_file": "/p"},
+    }))
+    with pytest.raises(ConfigError, match="weatherkit"):
+        load_config(str(cfg_file))
+
+def test_config_rejects_fill_in_weatherkit_subkeys(tmp_path):
+    cfg_file = tmp_path / "config.json"
+    cfg_file.write_text(json.dumps({
+        "recipient_email": "a@b.com",
+        "default_location": {"name": "X", "lat": 0.0, "lon": 0.0},
+        "nyt_api_key": "k",
+        "anthropic_api_key": "k",
+        "weatherkit": {"team_id": "FILL_IN", "service_id": "com.x", "key_id": "K", "key_file": "/p"},
+    }))
+    with pytest.raises(ConfigError, match="weatherkit"):
+        load_config(str(cfg_file))
 
 OPEN_METEO_RESPONSE = {
     "current": {"temperature_2m": 54.1, "weathercode": 3},
