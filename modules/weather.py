@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import requests
 from datetime import datetime
 
@@ -16,6 +18,7 @@ WMO_CODES = {
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 USER_AGENT = "NiederDaily/1.0 (personal newsletter)"
+DEFAULT_TRAVEL_CALENDARS = {"Little York", "niederCal", "TripIt"}
 
 
 def wmo_label(code: int) -> str:
@@ -81,7 +84,11 @@ def weather_block(config: dict, calendar_events: list) -> dict | None:
 
     travel = None
     travel_city = None
+    travel_calendars = set(config.get("weather_calendars", DEFAULT_TRAVEL_CALENDARS))
     for event in sorted(calendar_events, key=lambda e: (e.get("all_day", True), e.get("start", ""))):
+        source_calendar = event.get("calendar")
+        if source_calendar not in travel_calendars:
+            continue
         loc = event.get("location", "").strip()
         if not loc:
             continue

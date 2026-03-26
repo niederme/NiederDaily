@@ -1,35 +1,54 @@
-import pytest
+import types
 from datetime import date, timedelta
 from unittest.mock import MagicMock
 
-from modules.reminders import reminders_block
+import modules.reminders as reminders
 
 
-def _make_stdout(items):
-    """Build fake osascript stdout from list of (title, date_or_str) tuples."""
-    lines = []
-    for title, due in items:
-        due_str = due.isoformat() if isinstance(due, date) else due
-        lines.append(f"{title}|{due_str}|false")
-    return "\n".join(lines)
+class _FakeComponents:
+    def __init__(self, year, month, day):
+        self._year = year
+        self._month = month
+        self._day = day
+
+    def year(self):
+        return self._year
+
+    def month(self):
+        return self._month
+
+    def day(self):
+        return self._day
+
+
+def _make_reminder(title, due):
+    reminder = MagicMock()
+    reminder.title.return_value = title
+    if due is None:
+        reminder.dueDateComponents.return_value = None
+    else:
+        reminder.dueDateComponents.return_value = _FakeComponents(due.year, due.month, due.day)
+    return reminder
 
 
 def test_overdue_items(mocker):
     today = date.today()
-    yesterday = today - timedelta(days=1)
-    last_week = today - timedelta(days=8)
+    reminder_items = [
+        _make_reminder("Overdue task", today - timedelta(days=1)),
+        _make_reminder("Very overdue", today - timedelta(days=8)),
+    ]
 
-    stdout = _make_stdout([
-        ("Overdue task", yesterday),
-        ("Very overdue", last_week),
-    ])
+    store = MagicMock()
+    store.predicateForIncompleteRemindersWithDueDateStarting_ending_calendars_.return_value = "predicate"
+    mocker.patch.object(reminders, "EventKit", types.SimpleNamespace(EKEntityTypeReminder=1))
+    mocker.patch.object(reminders, "_event_store", return_value=store)
+    mocker.patch.object(reminders, "_has_reminders_access", return_value=True)
+    mocker.patch.object(reminders, "_selected_lists", return_value=["Inbox"])
+    mocker.patch.object(reminders, "_fetch_reminders", return_value=reminder_items)
+    mocker.patch.object(reminders, "_nsdate_for_local", side_effect=lambda dt: dt)
 
-    mock_result = MagicMock()
-    mock_result.returncode = 0
-    mock_result.stdout = stdout
-    mocker.patch("modules.reminders.subprocess.run", return_value=mock_result)
+    result = reminders.reminders_block([])
 
-    result = reminders_block([])
     assert result is not None
     assert len(result["overdue"]) == 2
     assert result["today"] == []
@@ -38,17 +57,18 @@ def test_overdue_items(mocker):
 
 def test_today_items(mocker):
     today = date.today()
+    store = MagicMock()
+    store.predicateForIncompleteRemindersWithDueDateStarting_ending_calendars_.return_value = "predicate"
 
-    stdout = _make_stdout([
-        ("Today task", today),
-    ])
+    mocker.patch.object(reminders, "EventKit", types.SimpleNamespace(EKEntityTypeReminder=1))
+    mocker.patch.object(reminders, "_event_store", return_value=store)
+    mocker.patch.object(reminders, "_has_reminders_access", return_value=True)
+    mocker.patch.object(reminders, "_selected_lists", return_value=["Inbox"])
+    mocker.patch.object(reminders, "_fetch_reminders", return_value=[_make_reminder("Today task", today)])
+    mocker.patch.object(reminders, "_nsdate_for_local", side_effect=lambda dt: dt)
 
-    mock_result = MagicMock()
-    mock_result.returncode = 0
-    mock_result.stdout = stdout
-    mocker.patch("modules.reminders.subprocess.run", return_value=mock_result)
+    result = reminders.reminders_block([])
 
-    result = reminders_block([])
     assert result is not None
     assert result["today"] == [{"title": "Today task", "due": today.isoformat()}]
     assert result["overdue"] == []
@@ -57,47 +77,56 @@ def test_today_items(mocker):
 
 def test_upcoming_items(mocker):
     today = date.today()
-    in_3_days = today + timedelta(days=3)
-    in_6_days = today + timedelta(days=6)
+    store = MagicMock()
+    store.predicateForIncompleteRemindersWithDueDateStarting_ending_calendars_.return_value = "predicate"
 
-    stdout = _make_stdout([
-        ("Upcoming A", in_3_days),
-        ("Upcoming B", in_6_days),
+    mocker.patch.object(reminders, "EventKit", types.SimpleNamespace(EKEntityTypeReminder=1))
+    mocker.patch.object(reminders, "_event_store", return_value=store)
+    mocker.patch.object(reminders, "_has_reminders_access", return_value=True)
+    mocker.patch.object(reminders, "_selected_lists", return_value=["Inbox"])
+    mocker.patch.object(reminders, "_fetch_reminders", return_value=[
+        _make_reminder("Upcoming A", today + timedelta(days=3)),
+        _make_reminder("Upcoming B", today + timedelta(days=6)),
     ])
+    mocker.patch.object(reminders, "_nsdate_for_local", side_effect=lambda dt: dt)
 
-    mock_result = MagicMock()
-    mock_result.returncode = 0
-    mock_result.stdout = stdout
-    mocker.patch("modules.reminders.subprocess.run", return_value=mock_result)
+    result = reminders.reminders_block([])
 
-    result = reminders_block([])
     assert result is not None
     assert len(result["upcoming"]) == 2
     assert result["overdue"] == []
     assert result["today"] == []
 
 
-def test_nonzero_returncode_returns_none(mocker):
-    mock_result = MagicMock()
-    mock_result.returncode = 1
-    mock_result.stdout = ""
-    mocker.patch("modules.reminders.subprocess.run", return_value=mock_result)
+def test_no_access_returns_none(mocker):
+    mocker.patch.object(reminders, "EventKit", types.SimpleNamespace(EKEntityTypeReminder=1))
+    mocker.patch.object(reminders, "_has_reminders_access", return_value=False)
+    assert reminders.reminders_block([]) is None
 
-    result = reminders_block([])
-    assert result is None
+
+def test_due_date_string_ignores_undefined_components(mocker):
+    undefined = 9223372036854775807
+    mocker.patch.object(reminders, "NSUndefinedDateComponent", undefined)
+    reminder = MagicMock()
+    reminder.dueDateComponents.return_value = _FakeComponents(undefined, 3, 25)
+
+    assert reminders._due_date_string(reminder) is None
 
 
 def test_upcoming_capped_at_5(mocker):
     today = date.today()
-    # 7 items all within the next 7 days
-    items = [(f"Task {i}", today + timedelta(days=i + 1)) for i in range(7)]
-    stdout = _make_stdout(items)
+    items = [_make_reminder(f"Task {i}", today + timedelta(days=i + 1)) for i in range(7)]
+    store = MagicMock()
+    store.predicateForIncompleteRemindersWithDueDateStarting_ending_calendars_.return_value = "predicate"
 
-    mock_result = MagicMock()
-    mock_result.returncode = 0
-    mock_result.stdout = stdout
-    mocker.patch("modules.reminders.subprocess.run", return_value=mock_result)
+    mocker.patch.object(reminders, "EventKit", types.SimpleNamespace(EKEntityTypeReminder=1))
+    mocker.patch.object(reminders, "_event_store", return_value=store)
+    mocker.patch.object(reminders, "_has_reminders_access", return_value=True)
+    mocker.patch.object(reminders, "_selected_lists", return_value=["Inbox"])
+    mocker.patch.object(reminders, "_fetch_reminders", return_value=items)
+    mocker.patch.object(reminders, "_nsdate_for_local", side_effect=lambda dt: dt)
 
-    result = reminders_block([])
+    result = reminders.reminders_block([])
+
     assert result is not None
     assert len(result["upcoming"]) == 5

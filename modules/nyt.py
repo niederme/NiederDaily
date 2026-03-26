@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import requests
 
-NYT_URL = "https://api.nytimes.com/svc/topstories/v2/home.json"
+NYT_URL = "https://api.nytimes.com/svc/mostpopular/v2/viewed/1.json"
 PREFERRED_FORMATS = ["threeByTwoSmallAt2X", "mediumThreeByTwo210", "mediumThreeByTwo440"]
 
 

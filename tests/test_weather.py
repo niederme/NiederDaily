@@ -62,10 +62,19 @@ def test_weather_block_with_travel(requests_mock):
     requests_mock.get("https://api.open-meteo.com/v1/forecast", json=OPEN_METEO_RESPONSE)
     requests_mock.get("https://nominatim.openstreetmap.org/search", json=NOMINATIM_RESPONSE)
     config = {"default_location": {"name": "Warwick, NY", "lat": 41.2512, "lon": -74.3607}}
-    events = [{"title": "Meeting", "location": "New York, NY", "all_day": False, "start": "9:00am"}]
+    events = [{"title": "Meeting", "location": "New York, NY", "calendar": "TripIt", "all_day": False, "start": "9:00am"}]
     result = weather_block(config, calendar_events=events)
     assert len(result["locations"]) == 2
     assert result["travel_city"] == "New York"
+
+def test_weather_block_ignores_non_travel_calendars(requests_mock):
+    requests_mock.get("https://api.open-meteo.com/v1/forecast", json=OPEN_METEO_RESPONSE)
+    requests_mock.get("https://nominatim.openstreetmap.org/search", json=NOMINATIM_RESPONSE)
+    config = {"default_location": {"name": "Warwick, NY", "lat": 41.2512, "lon": -74.3607}}
+    events = [{"title": "Bills game", "location": "New York, NY", "calendar": "Buffalo Bills", "all_day": False, "start": "1:00pm"}]
+    result = weather_block(config, calendar_events=events)
+    assert len(result["locations"]) == 1
+    assert result["travel_city"] is None
 
 def test_weather_block_returns_none_on_failure(requests_mock):
     requests_mock.get("https://api.open-meteo.com/v1/forecast", status_code=500)
