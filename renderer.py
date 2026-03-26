@@ -179,7 +179,7 @@ _SF_SYMBOL_MAP = [
     ("dust",            "sun.dust.fill",             MUTED),
     ("wind",            "wind",                      MUTED),
     ("breezy",          "wind",                      MUTED),
-    ("mostly clear",    "moon.haze.fill",            ACCENT),
+    ("mostly clear",    "sun.max.fill",              ACCENT),
     ("clear",           "sun.max.fill",              ACCENT),
     ("sun shower",      "cloud.sun.rain.fill",       ACCENT),
     ("sun",             "sun.max.fill",              ACCENT),
