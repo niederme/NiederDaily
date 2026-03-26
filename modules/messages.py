@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import logging
 import sqlite3
 import time
 from datetime import datetime
 from pathlib import Path
 
 DB_PATH = str(Path.home() / "Library" / "Messages" / "chat.db")
+log = logging.getLogger(__name__)
 
 # Apple's epoch offset: Mac absolute time starts 2001-01-01
 APPLE_EPOCH_OFFSET = 978307200  # seconds between 1970-01-01 and 2001-01-01
@@ -58,6 +60,7 @@ def resolve_contact(handle_id: str) -> str | None:
                         return f"{first} {last}".strip() or None
         return None
     except Exception:
+        log.warning("Failed to resolve contact for handle %r", handle_id, exc_info=True)
         return None
 
 
@@ -66,6 +69,7 @@ def messages_block() -> list | None:
         con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
         con.row_factory = sqlite3.Row
     except Exception:
+        log.warning("Unable to open Messages database at %s", DB_PATH, exc_info=True)
         return None
 
     try:
@@ -128,6 +132,7 @@ def messages_block() -> list | None:
         return result if result else []
 
     except Exception:
+        log.warning("Failed to build messages block from %s", DB_PATH, exc_info=True)
         return None
     finally:
         con.close()

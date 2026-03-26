@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 import subprocess
 import tempfile
 from datetime import date
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 LIST_SCRIPT_TEMPLATE = """\
 set targetMonth to {month}
@@ -61,6 +64,7 @@ def photo_block() -> tuple | None:
             capture_output=True, text=True, timeout=30
         )
         if result.returncode != 0:
+            log.warning("Photos list AppleScript failed: %s", result.stderr.strip() or result.stdout.strip() or f"exit {result.returncode}")
             return None
 
         photos = []
@@ -93,10 +97,12 @@ def photo_block() -> tuple | None:
                 capture_output=True, text=True, timeout=30
             )
             if export_result.returncode != 0:
+                log.warning("Photos export AppleScript failed for photo %s: %s", chosen["id"], export_result.stderr.strip() or export_result.stdout.strip() or f"exit {export_result.returncode}")
                 return None
 
             exported_files = list(Path(tmp_dir).iterdir())
             if not exported_files:
+                log.warning("Photos export succeeded but produced no files for photo %s", chosen["id"])
                 return None
 
             exported = exported_files[0]
@@ -114,4 +120,5 @@ def photo_block() -> tuple | None:
         return (img_bytes, meta)
 
     except Exception:
+        log.warning("Failed to build on-this-day photo block", exc_info=True)
         return None
