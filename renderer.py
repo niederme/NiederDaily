@@ -20,7 +20,7 @@ SECTION_LABEL_STYLE = f"font-size:16px;font-weight:700;letter-spacing:-0.01em;co
 BASE_STYLES = """
 body{margin:0;padding:0;background:#ffffff;color:#121212;font-family:Sohne,"SF Pro Text","SF Pro Display",-apple-system,BlinkMacSystemFont,"Helvetica Neue","Arial Nova",Arial,sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
 a{color:#121212;}
-.wrap{max-width:680px;margin:0 auto;}
+.wrap{max-width:680px;margin:0 auto;padding:24px 20px 48px;}
 .email{background:#ffffff;overflow:hidden;}
 .header{padding:44px 40px 24px;}
 .date-line{font-size:16px;font-weight:300;line-height:1.35;letter-spacing:-0.01em;color:#474a51;max-width:520px;margin-bottom:12px;}
@@ -60,16 +60,17 @@ a{color:#121212;}
 .footer a{color:#121212;text-decoration:none;border-bottom:1px solid rgba(18,18,18,0.65);}
 @media only screen and (max-width: 640px){
   .wrap{max-width:100% !important;}
-  .header{padding:28px 14px 18px !important;}
-  .section{padding:0 14px 20px !important;}
-  .photo-caption{padding:12px 14px !important;}
-  .footer{padding:16px 14px 28px !important;}
+  .wrap{padding:16px 10px 32px !important;}
+  .header{padding:24px 12px 16px !important;}
+  .section{padding:0 12px 18px !important;}
+  .photo-caption{padding:12px 12px !important;}
+  .footer{padding:16px 12px 24px !important;}
   .date-line{font-size:14px !important;margin-bottom:8px !important;}
   .logo{font-size:36px !important;margin-bottom:12px !important;}
   .welcome{font-size:16px !important;line-height:1.45 !important;}
   .section-rule{margin-bottom:18px !important;}
   .module-place{font-size:18px !important;margin-bottom:10px !important;}
-  .weather-card{padding:16px 16px 14px !important;border-radius:16px !important;}
+  .weather-card{padding:14px 14px 12px !important;border-radius:16px !important;}
   .display-line{font-size:42px !important;gap:12px !important;}
   .weather-icon{width:60px !important;height:60px !important;}
   .weather-icon svg{width:40px !important;height:40px !important;}
@@ -84,8 +85,8 @@ a{color:#121212;}
   .msgrow{display:block !important;padding-bottom:12px !important;margin-bottom:12px !important;}
   .msgname{font-size:15px !important;}
   .msgmeta{font-size:11px !important;}
-  .nyt{display:flex !important;gap:12px !important;align-items:flex-start !important;padding-bottom:18px !important;margin-bottom:18px !important;}
-  .nytthumb{display:block !important;width:120px !important;height:80px !important;max-width:none !important;flex-shrink:0 !important;margin:0 !important;}
+  .nyt{display:flex !important;gap:10px !important;align-items:flex-start !important;padding-bottom:16px !important;margin-bottom:16px !important;}
+  .nytthumb{display:block !important;width:112px !important;height:75px !important;max-width:none !important;flex-shrink:0 !important;margin:0 !important;}
   .nythed{font-size:16px !important;margin-bottom:5px !important;}
   .nytdek{font-size:12px !important;line-height:1.45 !important;}
   .nytbyline{font-size:11px !important;margin-top:6px !important;}
@@ -322,7 +323,7 @@ def render_email(
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>{BASE_STYLES}</style></head>
 <body>
-<div class="wrap" style="padding:24px 20px 48px;">
+<div class="wrap">
 <div class="email">
   <div class="header">
     <div class="date-line">{date_str}</div>
