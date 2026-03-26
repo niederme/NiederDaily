@@ -8,6 +8,8 @@ BADGE_OVERDUE = '<span style="display:inline-block;background:#fee2e2;color:#b91
 BADGE_TODAY   = '<span style="display:inline-block;background:#dbeafe;color:#1d4ed8;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-right:6px;">Today</span>'
 BADGE_REPLY   = '<span style="display:inline-block;background:#fef3c7;color:#92400e;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;">Needs reply</span>'
 
+ACCENT = "#ff453a"
+MUTED = "#474a51"
 SECTION_LABEL_STYLE = "font-size:10px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#bbb;margin-bottom:12px;"
 
 BASE_STYLES = """
@@ -35,21 +37,59 @@ def _label(text: str) -> str:
     return f'<div style="{SECTION_LABEL_STYLE}">{_esc(text)}</div>'
 
 
-def _section(label: str, content: str) -> str:
-    return f'<div class="section">{_label(label)}{content}</div>'
+def _section(label: str | None, content: str, show_rule: bool = True) -> str:
+    label_html = _label(label) if label else ""
+    border = "border-bottom:1px solid #f2f0ec;" if show_rule else ""
+    return f'<div class="section" style="{border}">{label_html}{content}</div>'
+
+
+def _weather_icon(condition: str) -> str:
+    """Return weather icon emoji for condition."""
+    # Stub implementation — can be expanded later
+    return ""
 
 
 def _weather_html(data: dict) -> str:
     parts = []
     for loc in data["locations"]:
-        label = f"WEATHER · {loc['location'].upper()}"
-        body = (
-            f'<div style="font-size:32px;font-weight:200;color:#1a1a1a;letter-spacing:-0.02em;">'
-            f'{loc["temp"]}°&thinsp; {_esc(loc["condition"])}</div>'
-            f'<div style="font-size:12px;color:#999;margin-top:4px;">'
-            f'High {loc["high"]}° · Low {loc["low"]}° · Sunrise {_esc(loc["sunrise"])} · Sunset {_esc(loc["sunset"])}</div>'
+        # sentence replaces summary — same CSS class, same position
+        sentence_html = ""
+        if loc.get("sentence"):
+            sentence_html = f'<div class="weather-summary">{_esc(loc["sentence"])}</div>'
+
+        # alert banner (new — inline styles, no CSS class)
+        alert_html = ""
+        for alert in loc.get("alerts", []):
+            alert_html += (
+                f'<div style="margin-top:10px;padding:8px 0;border-top:1px solid rgba(214,208,198,0.6);">'
+                f'<div style="font-size:12px;font-weight:600;color:#ff453a;">'
+                f'⚠ <a href="{_esc(alert["url"])}" style="color:#ff453a;text-decoration:none;">'
+                f'{_esc(alert["event"])} →</a></div>'
+                f'<div style="font-size:11px;color:{MUTED};margin-top:2px;">'
+                f'Until {_esc(alert["expires"])} · {_esc(alert["agency"])}</div>'
+                f'</div>'
+            )
+
+        # attribution (Apple requirement — inline styles)
+        attribution_html = (
+            f'<div style="font-size:10px;color:#9aa0a6;margin-top:8px;">'
+            f'<a href="https://weatherkit.apple.com/legal-attribution.html" '
+            f'style="color:#9aa0a6;text-decoration:none;">Weather</a></div>'
         )
-        parts.append(_section(label, body))
+
+        body = (
+            f'<div class="weather-card">'
+            f'<div class="module-place">{_esc(loc["location"])}</div>'
+            f'<div class="display-line">'
+            f'{_weather_icon(loc["condition"])}'
+            f'<span>{loc["high"]}° / {loc["low"]}°</span></div>'
+            f'{sentence_html}'
+            f'<div class="weather-meta">Sunrise {_esc(loc["sunrise"])} · Sunset {_esc(loc["sunset"])}</div>'
+            f'{alert_html}'
+            f'{attribution_html}'
+            f'</div>'
+        )
+        parts.append(_section(None, body, show_rule=False))  # no rule, no label
     return "".join(parts)
 
 
