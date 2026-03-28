@@ -40,8 +40,6 @@ def welcome_block(
         if weather_data and weather_data.get("locations"):
             w = weather_data["locations"][0]
             parts.append(f"Weather in {w['location']}: {w['temp']}°F, {w['condition']}.")
-        if weather_data and weather_data.get("travel_city"):
-            parts.append(f"Traveling to {weather_data['travel_city']} today.")
 
         if calendar_events:
             timed = [e for e in calendar_events if not e.get("all_day")]
