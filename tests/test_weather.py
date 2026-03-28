@@ -203,6 +203,15 @@ def test_geocode_location_returns_lat_lon(requests_mock):
     assert result["lon"] == pytest.approx(-74.0060, rel=1e-3)
     assert result["name"] == "New York, NY"
 
+def test_geocode_location_falls_back_to_input_string_when_no_city_field(requests_mock):
+    """Street address geocodes often lack city/town fields — parse the input string instead."""
+    response = [{"lat": "41.6534", "lon": "-74.6615", "display_name": "750, Resorts World Drive, Monticello, Sullivan County, New York, 12701, United States",
+                 "address": {"house_number": "750", "road": "Resorts World Drive", "county": "Sullivan County", "state": "New York", "state_code": "NY"}}]
+    requests_mock.get("https://nominatim.openstreetmap.org/search", json=response)
+    from modules.weather import geocode_location
+    result = geocode_location("750 Resorts World Drive, Monticello, NY, 12701")
+    assert result["name"] == "Monticello, NY"
+
 def test_geocode_location_returns_none_on_no_results(requests_mock):
     requests_mock.get("https://nominatim.openstreetmap.org/search", json=[])
     from modules.weather import geocode_location

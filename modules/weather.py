@@ -144,9 +144,22 @@ def geocode_location(location_str: str) -> dict | None:
             or addr.get("town")
             or addr.get("village")
             or addr.get("hamlet")
-            or addr.get("county")
-            or r["display_name"].split(",")[0].strip()
+            or addr.get("municipality")
+            or addr.get("city_district")
+            or addr.get("suburb")
         )
+        if not city:
+            # No city-level field — parse the original input string before falling
+            # back to county or display_name (both can be unhelpfully broad/raw).
+            for part in [p.strip() for p in location_str.split(",")]:
+                if not part or part[0].isdigit() or len(part) <= 2:
+                    continue
+                if any(kw in part for kw in ("United States", "USA", "Canada")):
+                    continue
+                city = part
+                break
+            else:
+                city = addr.get("county") or r["display_name"].split(",")[0].strip()
         state = addr.get("state_code") or addr.get("state", "")
         name = f"{city}, {state}" if state else city
         return {"lat": float(r["lat"]), "lon": float(r["lon"]), "name": name}
