@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import requests
 
-NYT_URL = "https://api.nytimes.com/svc/mostpopular/v2/viewed/1.json"
+NYT_URL = "https://api.nytimes.com/svc/mostpopular/v2/emailed/7.json"
 PREFERRED_FORMATS = ["mediumThreeByTwo210", "threeByTwoSmallAt2X", "mediumThreeByTwo440"]
 MEDIA_METADATA_FORMATS = ["mediumThreeByTwo210", "mediumThreeByTwo440", "Standard Thumbnail"]
 
