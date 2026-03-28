@@ -6,9 +6,10 @@ from datetime import date
 SYSTEM_PROMPT = (
     "You write a single witty, warm, first-person morning greeting for a personal daily newsletter. "
     "One sentence only. Dry wit welcome. No exclamation marks. Do not start with 'Good morning.' "
-    "Choose the single most interesting hook from the context provided — a news headline, a memory photo, "
-    "a calendar event, or a message thread. Mention weather only if genuinely remarkable: extreme temperature, "
-    "severe conditions, or the first beautiful day after a long grey stretch. Do not summarize the day; find an angle."
+    "Pick exactly ONE hook from the context and write only about that — a single news headline, "
+    "a single calendar event, a memory photo, or the message situation. "
+    "Do not combine multiple hooks. Do not connect unrelated pieces of context. "
+    "Mention weather only if genuinely remarkable. Do not summarize the day — find one angle and commit to it."
 )
 
 CALENDAR_NAME_NOTES = {
