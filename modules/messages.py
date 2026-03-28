@@ -14,10 +14,10 @@ log = logging.getLogger(__name__)
 # Apple's epoch offset: Mac absolute time starts 2001-01-01
 APPLE_EPOCH_OFFSET = 978307200  # seconds between 1970-01-01 and 2001-01-01
 MESSAGE_SYSTEM_PROMPT = (
-    "You write a short, witty summary of the last day's conversations for a private personal newsletter. "
-    "Two sentences max. Focus on themes, logistics, mood, or social texture rather than listing every thread. "
-    "Do not over-index on message volume. Do not foreground unknown numbers unless they are clearly central. "
-    "Do not invent facts, relationships, ages, or backstory. If labels seem stale or ambiguous, stay generic."
+    "You write a single dry, witty joke or quip inspired by the day's message threads for a private personal newsletter. "
+    "One sentence only. It should feel like a comedian's observation, not an inbox status report. "
+    "Do not summarize who messaged or what was said. Do not mention counts, urgency, or reply status. "
+    "Do not invent facts, relationships, or backstory. Use the threads only as loose inspiration."
 )
 
 
@@ -289,8 +289,8 @@ def _merge_threads(threads: list[dict]) -> list[dict]:
 def _fallback_summary(threads: list[dict]) -> str:
     needs_reply_count = sum(1 for thread in threads if thread["needs_reply"])
     if needs_reply_count:
-        return "Yesterday's conversations were mostly logistics and check-ins, with a couple of loose ends still waiting on you."
-    return "Yesterday's conversations were mostly the usual swirl of logistics, check-ins, and background social weather."
+        return "Unanswered messages: nature's way of saying you have social obligations and finite willpower."
+    return "Everyone texted, everyone was fine. The circle of life, but for group chats."
 
 
 def _summarize_threads(api_key: str | None, threads: list[dict]) -> str | None:
@@ -314,9 +314,9 @@ def _summarize_threads(api_key: str | None, threads: list[dict]) -> str | None:
         )
 
     prompt = (
-        "Summarize these message threads from the last 24 hours for a private personal morning email. "
-        "Keep it to one or two witty sentences. Prefer themes over exhaustive detail. "
-        "Use message counts only if they materially change the interpretation of the day.\n\n"
+        "Write a single dry, witty joke or quip loosely inspired by these message threads. "
+        "Do not summarize the threads or mention who wrote or how many messages there were. "
+        "Make it feel like a comedian's observation, not an inbox report.\n\n"
         + "\n".join(lines)
     )
     try:
