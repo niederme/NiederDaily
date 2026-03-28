@@ -106,8 +106,8 @@ def fetch_weather(lat: float, lon: float, name: str, config: dict) -> dict | Non
         data = resp.json()
 
         current = data["currentWeather"]
-        code = current["conditionCode"]
         today = data["forecastDaily"]["days"][0]
+        code = today["conditionCode"]
         alerts_raw = data.get("weatherAlerts", {}).get("alerts", [])
 
         def c_to_f(c: float) -> int:
@@ -131,14 +131,25 @@ def fetch_weather(lat: float, lon: float, name: str, config: dict) -> dict | Non
 def geocode_location(location_str: str) -> dict | None:
     try:
         resp = requests.get(NOMINATIM_URL, params={
-            "q": location_str, "format": "json", "limit": 1,
+            "q": location_str, "format": "json", "limit": 1, "addressdetails": 1,
         }, headers={"User-Agent": USER_AGENT}, timeout=10)
         resp.raise_for_status()
         results = resp.json()
         if not results:
             return None
         r = results[0]
-        return {"lat": float(r["lat"]), "lon": float(r["lon"]), "name": r["display_name"]}
+        addr = r.get("address", {})
+        city = (
+            addr.get("city")
+            or addr.get("town")
+            or addr.get("village")
+            or addr.get("hamlet")
+            or addr.get("county")
+            or r["display_name"].split(",")[0].strip()
+        )
+        state = addr.get("state_code") or addr.get("state", "")
+        name = f"{city}, {state}" if state else city
+        return {"lat": float(r["lat"]), "lon": float(r["lon"]), "name": name}
     except Exception:
         return None
 
