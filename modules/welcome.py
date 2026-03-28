@@ -5,8 +5,10 @@ from datetime import date
 
 SYSTEM_PROMPT = (
     "You write a single witty, warm, first-person morning greeting for a personal daily newsletter. "
-    "One sentence only. Dry wit welcome. Reference the weather or the day's plans naturally. "
-    "Do not start with 'Good morning'. Do not use exclamation marks."
+    "One sentence only. Dry wit welcome. No exclamation marks. Do not start with 'Good morning.' "
+    "Choose the single most interesting hook from the context provided — a news headline, a memory photo, "
+    "a calendar event, or a message thread. Mention weather only if genuinely remarkable: extreme temperature, "
+    "severe conditions, or the first beautiful day after a long grey stretch. Do not summarize the day; find an angle."
 )
 
 CALENDAR_NAME_NOTES = {
@@ -15,7 +17,14 @@ CALENDAR_NAME_NOTES = {
 }
 
 
-def welcome_block(api_key: str, weather_data: dict | None, calendar_events: list | None) -> str | None:
+def welcome_block(
+    api_key: str,
+    weather_data: dict | None,
+    calendar_events: list | None,
+    nyt_stories: list | None = None,
+    photo: tuple | None = None,
+    messages: dict | None = None,
+) -> str | None:
     if not api_key:
         return None
     if not weather_data and not calendar_events:
@@ -46,6 +55,26 @@ def welcome_block(api_key: str, weather_data: dict | None, calendar_events: list
             ]
             if matched_notes:
                 parts.append("Calendar shorthand: " + "; ".join(matched_notes) + ".")
+
+        if nyt_stories:
+            titles = " / ".join(f'"{s["title"]}"' for s in nyt_stories[:3] if s.get("title"))
+            if titles:
+                parts.append(f"NEWS: {titles}.")
+
+        if photo:
+            _, meta = photo
+            year = meta.get("year", "")
+            location = meta.get("location", "")
+            desc = meta.get("description", "")
+            fav = " ★" if meta.get("is_favorite") else ""
+            loc_part = f", {location}" if location else ""
+            if desc:
+                parts.append(f"MEMORY PHOTO ({year}{loc_part}{fav}): {desc}")
+            elif year:
+                parts.append(f"MEMORY PHOTO from {year}{loc_part}{fav}.")
+
+        if messages and messages.get("thread_count", 0) > 0:
+            parts.append(f"MESSAGES: {messages['summary']}")
 
         user_prompt = " ".join(parts)
 

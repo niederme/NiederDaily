@@ -40,6 +40,41 @@ def test_welcome_block_passes_travel_city_to_prompt(mocker):
     assert "New York" in prompt_text
 
 
+def test_welcome_block_includes_photo_description_in_prompt(mocker):
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = MagicMock(
+        content=[MagicMock(text="Seven years ago in Lisbon, apparently I was somewhere worth remembering.")]
+    )
+    mocker.patch("modules.welcome.anthropic.Anthropic", return_value=mock_client)
+    photo = (b"fake-image-bytes", {
+        "year": "2019", "location": "Lisbon, Portugal", "is_favorite": True,
+        "description": "A narrow cobblestone street winding into golden afternoon light.",
+    })
+    welcome_block("sk-ant-test", weather_data=WEATHER, calendar_events=EVENTS, photo=photo)
+    call_args = mock_client.messages.create.call_args
+    prompt_text = call_args.kwargs["messages"][0]["content"]
+    assert "MEMORY PHOTO" in prompt_text
+    assert "Lisbon" in prompt_text
+    assert "cobblestone" in prompt_text
+
+
+def test_welcome_block_includes_nyt_headlines_in_prompt(mocker):
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = MagicMock(
+        content=[MagicMock(text="Senate found something to agree on, which is statistically improbable.")]
+    )
+    mocker.patch("modules.welcome.anthropic.Anthropic", return_value=mock_client)
+    stories = [
+        {"title": "Senate Passes $3T Budget Bill", "abstract": "", "byline": "", "url": "", "thumbnail": None},
+        {"title": "Apple Unveils AI Chip", "abstract": "", "byline": "", "url": "", "thumbnail": None},
+    ]
+    welcome_block("sk-ant-test", weather_data=WEATHER, calendar_events=EVENTS, nyt_stories=stories)
+    call_args = mock_client.messages.create.call_args
+    prompt_text = call_args.kwargs["messages"][0]["content"]
+    assert "NEWS" in prompt_text
+    assert "Senate Passes" in prompt_text
+
+
 def test_welcome_block_passes_calendar_name_notes_to_prompt(mocker):
     mock_client = MagicMock()
     mock_client.messages.create.return_value = MagicMock(
