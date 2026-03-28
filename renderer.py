@@ -361,7 +361,7 @@ def _nyt_html(stories: list, *, show_rule: bool = True) -> str:
             f'<div style="flex:1;"><div class="nythed">{_esc(s["title"])}</div>'
             f'<div class="nytdek">{_esc(s["abstract"])}</div>{byline}</div>{img}</a></div>'
         )
-    return _section("New York Times Most Popular", "".join(rows), show_rule=show_rule)
+    return _section("New York Times Most Emailed", "".join(rows), show_rule=show_rule)
 
 
 def _photo_html(photo: tuple, *, show_rule: bool = True) -> str:
