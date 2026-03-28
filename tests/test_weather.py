@@ -67,7 +67,8 @@ WEATHERKIT_RESPONSE_WITH_ALERT = {
     }
 }
 
-NOMINATIM_RESPONSE = [{"lat": "40.7128", "lon": "-74.0060", "display_name": "New York, NY, USA"}]
+NOMINATIM_RESPONSE = [{"lat": "40.7128", "lon": "-74.0060", "display_name": "New York, NY, USA",
+                       "address": {"city": "New York", "state": "New York", "state_code": "NY"}}]
 
 # ── Config tests ──────────────────────────────────────────────────────────────
 
@@ -200,7 +201,7 @@ def test_geocode_location_returns_lat_lon(requests_mock):
     result = geocode_location("New York, NY")
     assert result["lat"] == pytest.approx(40.7128, rel=1e-3)
     assert result["lon"] == pytest.approx(-74.0060, rel=1e-3)
-    assert result["name"] == "New York, NY, USA"
+    assert result["name"] == "New York, NY"
 
 def test_geocode_location_returns_none_on_no_results(requests_mock):
     requests_mock.get("https://nominatim.openstreetmap.org/search", json=[])
