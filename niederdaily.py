@@ -46,15 +46,16 @@ def run(config_path: str = None):
         home = weather["locations"][0]
         home["sentence"] = weather_sentence(home, conf["anthropic_api_key"])
 
-    # Step 3: welcome needs weather + calendar
-    welcome = _safe(welcome_block, conf["anthropic_api_key"],
-                    weather_data=weather, calendar_events=calendar)
-
-    # Steps 4-7: independent modules
+    # Steps 3-6: independent modules
     reminders = _safe(reminders_block, conf.get("reminders_lists", []))
     messages  = _safe(messages_block, conf["anthropic_api_key"])
     photo     = _safe(photo_block, conf["anthropic_api_key"])
     nyt       = _safe(nyt_block, conf.get("nyt_api_key"))
+
+    # Step 7: welcome uses all available context to pick the best hook
+    welcome = _safe(welcome_block, conf["anthropic_api_key"],
+                    weather_data=weather, calendar_events=calendar,
+                    nyt_stories=nyt, photo=photo, messages=messages)
 
     msg = render_email(
         recipient=conf["recipient_email"],
