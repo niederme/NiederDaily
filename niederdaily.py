@@ -41,10 +41,10 @@ def run(config_path: str = None):
     if calendar:
         weather = _safe(weather_block, conf, calendar_events=calendar)
 
-    # Generate Haiku sentence once, for home location only
+    # Generate Haiku sentence for each location
     if weather and weather.get("locations"):
-        home = weather["locations"][0]
-        home["sentence"] = weather_sentence(home, conf["anthropic_api_key"])
+        for loc in weather["locations"]:
+            loc["sentence"] = weather_sentence(loc, conf["anthropic_api_key"])
 
     # Steps 3-6: independent modules
     reminders = _safe(reminders_block, conf.get("reminders_lists", []))
