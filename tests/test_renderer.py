@@ -158,7 +158,7 @@ def test_render_places_photo_before_news():
         weather=None, calendar=None, reminders=None, messages=None, photo=PHOTO, nyt=NYT
     )
     html = _html_from_message(msg)
-    assert html.index("On This Day") < html.index("New York Times Most Popular")
+    assert html.index("On This Day") < html.index("Story One")
 
 
 def test_render_calendar_section_includes_event_title():
