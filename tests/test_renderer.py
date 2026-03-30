@@ -48,8 +48,7 @@ def test_render_includes_weather_icon():
     assert 'class="weather-meta"' in html
     assert "<svg" in html
     assert "54°" in html
-    assert "High 61°" in html
-    assert "Low 44°" in html
+    assert "61° / 44°" in html
     assert "Overcast today, with gusts up to 28 mph this afternoon." in html
     assert "Sunrise 6:52am" in html
 
@@ -74,13 +73,13 @@ def test_render_includes_photo_attachment():
     assert "On This Day" in html
     assert "March 25, 2019" in html
     assert "Flash photo after drinks." in html
-    assert "Favorite" in html
+    assert "Warwick, NY" in html
+    assert "Favorite" not in html
     assert "2 faces" not in html
     assert "IMG_1234.JPG" not in html
-    assert "Keywords: friends, night" in html
+    assert "Keywords:" not in html
     assert "photo-caption" not in html
-    payloads = msg.get_payload()
-    content_ids = [p.get("Content-ID", "") for p in payloads if hasattr(p, 'get')]
+    content_ids = [part.get("Content-ID", "") for part in msg.walk() if hasattr(part, "get")]
     assert any("onthisday" in cid for cid in content_ids)
 
 def test_render_does_not_render_messages_section():
