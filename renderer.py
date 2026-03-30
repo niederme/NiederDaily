@@ -341,12 +341,6 @@ def _reminders_html(data: dict, *, show_rule: bool = True) -> str:
     return _section("Reminders", "".join(rows), show_rule=show_rule)
 
 
-def _messages_html(data: dict, *, show_rule: bool = True) -> str:
-    summary = _esc(data.get("summary") or "")
-    body = f'<div class="msg-summary">{summary}</div>'
-    return _section("Messages", body, show_rule=show_rule)
-
-
 def _nyt_html(stories: list, *, show_rule: bool = True) -> str:
     rows = []
     for s in stories:
@@ -402,7 +396,7 @@ def render_email(
     weather: dict | None,
     calendar: list | None,
     reminders: dict | None,
-    messages: list | None,
+    messages: dict | None,
     photo: tuple | None,
     nyt: list | None,
 ) -> MIMEMultipart:
@@ -425,9 +419,6 @@ def render_email(
         next_section_rule = True
     if reminders:
         sections.append(_reminders_html(reminders, show_rule=next_section_rule))
-        next_section_rule = True
-    if messages:
-        sections.append(_messages_html(messages, show_rule=next_section_rule))
         next_section_rule = True
     if photo:
         sections.append(_photo_html(photo, show_rule=next_section_rule))

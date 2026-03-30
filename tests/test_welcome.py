@@ -86,3 +86,21 @@ def test_welcome_block_passes_calendar_name_notes_to_prompt(mocker):
     call_args = mock_client.messages.create.call_args
     prompt_text = call_args.kwargs["messages"][0]["content"]
     assert "DC means Danielle" in prompt_text
+
+
+def test_welcome_block_includes_message_summary_in_prompt(mocker):
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = MagicMock(
+        content=[MagicMock(text="Apparently I spent yesterday accumulating timestamps instead of responses.")]
+    )
+    mocker.patch("modules.welcome.anthropic.Anthropic", return_value=mock_client)
+    messages = {
+        "summary": "Yesterday was mostly logistics, a couple of check-ins, and one conversation still politely clearing its throat for a reply.",
+        "thread_count": 4,
+        "needs_reply_count": 1,
+    }
+    welcome_block("sk-ant-test", weather_data=WEATHER, calendar_events=EVENTS, messages=messages)
+    call_args = mock_client.messages.create.call_args
+    prompt_text = call_args.kwargs["messages"][0]["content"]
+    assert "MESSAGES" in prompt_text
+    assert "clearing its throat for a reply" in prompt_text
