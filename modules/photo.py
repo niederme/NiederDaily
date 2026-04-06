@@ -471,7 +471,31 @@ def _resize_for_email(img_bytes: bytes, img_fmt: str, max_px: int = 1200) -> tup
         rgb.save(buf, format="JPEG", quality=85, optimize=True)
         return buf.getvalue(), "jpeg"
     except Exception:
-        return img_bytes, img_fmt
+        pass
+
+    # Fallback: use macOS sips to convert any format (including HEIC) to JPEG
+    try:
+        import os
+        suffix = f".{img_fmt.lower()}" if img_fmt else ".bin"
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
+            f.write(img_bytes)
+            in_path = f.name
+        out_path = in_path + ".jpg"
+        try:
+            result = subprocess.run(
+                ["sips", "-s", "format", "jpeg", "-Z", str(max_px), in_path, "--out", out_path],
+                capture_output=True, timeout=30,
+            )
+            if result.returncode == 0 and os.path.exists(out_path):
+                return Path(out_path).read_bytes(), "jpeg"
+        finally:
+            os.unlink(in_path)
+            if os.path.exists(out_path):
+                os.unlink(out_path)
+    except Exception:
+        pass
+
+    return img_bytes, img_fmt
 
 
 def photo_block(api_key: str | None = None) -> tuple | None:
