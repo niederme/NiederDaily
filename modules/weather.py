@@ -66,10 +66,10 @@ def _make_jwt(config: dict) -> str:
 
 
 def _fmt_time(iso: str) -> str:
-    """Convert RFC 3339 timestamp (e.g. '2026-03-25T06:52:00Z') to '6:52am'."""
+    """Convert RFC 3339 timestamp (e.g. '2026-03-25T10:52:00Z') to local time '6:52am'."""
     try:
         dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
-        return dt.strftime("%-I:%M%p").lower()
+        return dt.astimezone().strftime("%-I:%M%p").lower()
     except Exception:
         return iso
 

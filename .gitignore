@@ -12,6 +12,10 @@ venv/
 
 # Local agent / editor state
 .claude/
+.superpowers/
+
+# Repo-local worktrees
+.worktrees/
 
 # Accidental local config or OAuth artifacts
 config.json
