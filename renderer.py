@@ -62,7 +62,7 @@ a{color:#121212;}
 .photo-module{max-width:520px;margin:0 auto;}
 .photo-frame{display:block;border-radius:14px;overflow:hidden;border:1px solid rgba(214,208,198,0.7);background:#ffffff;line-height:0;}
 .photo-frame img{width:100%;display:block;}
-.photo-description{font-size:13px;line-height:1.45;color:#474a51;margin-top:10px;}
+.photo-description{font-size:16px;font-weight:400;letter-spacing:-0.01em;line-height:1.45;color:#474a51;margin-top:4px;}
 .photo-meta{margin-top:6px;font-size:12px;line-height:1.45;color:#6d7178;}
 .footer{padding:28px 40px 36px;font-size:11px;color:#474a51;border-top:1px solid rgba(214,208,198,0.8);background:#ffffff;}
 .footer a{color:#121212;text-decoration:none;border-bottom:1px solid rgba(18,18,18,0.65);}
