@@ -162,6 +162,14 @@ will run preflight/prompt mode so macOS can present missing permission dialogs w
 ./.venv/bin/python niederdaily.py
 ```
 
+### Rebuild and run the app wrapper
+
+```bash
+bash ~/~Repos/NiederDaily/setup/build_niederdaily_app.sh && /Users/niederme/Applications/NiederDaily.app/Contents/MacOS/NiederDaily --run
+```
+
+Use this when you've changed the source and want to rebuild the wrapper app and immediately trigger a real send through it — the same execution path `launchd` uses. This is the right test before trusting a scheduled run, because the wrapper app is what holds TCC permissions for Calendar, Reminders, Photos, and Messages. Running Python directly bypasses that app identity and may silently miss those modules.
+
 ### Logs
 
 ```bash
