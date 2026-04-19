@@ -3,7 +3,7 @@ from __future__ import annotations
 import jwt
 import time
 import requests
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 import anthropic
@@ -115,6 +115,8 @@ def fetch_weather(lat: float, lon: float, name: str, config: dict) -> dict | Non
 
         return {
             "location": name,
+            "lat": lat,
+            "lon": lon,
             "temp": c_to_f(current["temperature"]),
             "condition": CONDITION_LABELS.get(code, "Unknown"),
             "high": c_to_f(today["temperatureMax"]),
@@ -126,6 +128,54 @@ def fetch_weather(lat: float, lon: float, name: str, config: dict) -> dict | Non
         }
     except Exception:
         return None
+
+
+SEASON_TERMS = {
+    "spring": {"spring"},
+    "summer": {"summer"},
+    "autumn": {"autumn", "fall"},
+    "winter": {"winter"},
+}
+
+
+def _season_for_latitude(lat: float | None, today: date | None = None) -> str | None:
+    """Return the meteorological season for the given latitude and date."""
+    if lat is None:
+        return None
+
+    today = today or date.today()
+    northern = lat >= 0
+    month = today.month
+
+    if month in (3, 4, 5):
+        return "spring" if northern else "autumn"
+    if month in (6, 7, 8):
+        return "summer" if northern else "winter"
+    if month in (9, 10, 11):
+        return "autumn" if northern else "spring"
+    return "winter" if northern else "summer"
+
+
+def _fallback_weather_sentence(loc: dict) -> str:
+    condition = str(loc.get("condition") or "Weather")
+    location = str(loc.get("location") or "today")
+    temp = loc.get("temp")
+    if temp is None:
+        return f"{condition} in {location} today."
+    return f"{condition} in {location} today, with temperatures around {temp}\N{DEGREE SIGN}F."
+
+
+def _has_conflicting_season(text: str, expected_season: str | None) -> bool:
+    if not text or not expected_season:
+        return False
+
+    lowered = text.lower()
+    for season, terms in SEASON_TERMS.items():
+        if season == expected_season:
+            continue
+        if any(term in lowered for term in terms):
+            return True
+    return False
 
 
 def geocode_location(location_str: str) -> dict | None:
@@ -173,10 +223,20 @@ def weather_sentence(loc: dict, api_key: str) -> str:
     """
     try:
         client = anthropic.Anthropic(api_key=api_key)
+        today = date.today()
+        season = _season_for_latitude(loc.get("lat"), today)
+        season_guidance = ""
+        if season:
+            hemisphere = "Northern" if loc.get("lat", 0) >= 0 else "Southern"
+            season_guidance = (
+                f"Today is {today.strftime('%B %-d')}, which is {season} in the {hemisphere} Hemisphere. "
+                f"If you mention a season, it must be {season}. "
+            )
         prompt = (
             f"Write a single short sentence describing today's weather for {loc['location']}. "
             f"Current: {loc['temp']}°F, {loc['condition']}. "
             f"High {loc['high']}°, Low {loc['low']}°. "
+            f"{season_guidance}"
             f"Be specific and vivid. No greeting. Plain text only."
         )
         resp = client.messages.create(
@@ -184,7 +244,10 @@ def weather_sentence(loc: dict, api_key: str) -> str:
             max_tokens=60,
             messages=[{"role": "user", "content": prompt}],
         )
-        return resp.content[0].text.strip()
+        sentence = resp.content[0].text.strip()
+        if _has_conflicting_season(sentence, season):
+            return _fallback_weather_sentence(loc)
+        return sentence
     except Exception:
         return ""
 

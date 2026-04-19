@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from config import load_config, ConfigError
 import json
+from datetime import date
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -140,6 +141,8 @@ def test_fetch_weather_returns_structured_data(requests_mock):
         result = fetch_weather(41.2512, -74.3607, "Warwick, NY", WEATHERKIT_CONFIG)
 
     assert result["location"] == "Warwick, NY"
+    assert result["lat"] == pytest.approx(41.2512)
+    assert result["lon"] == pytest.approx(-74.3607)
     assert result["temp"] == 54
     assert result["condition"] == "Partly Cloudy"
     assert result["high"] == 61
@@ -284,9 +287,14 @@ def test_weather_sentence_returns_string():
         mock_resp.content = [MagicMock(text="Bundle up today.")]
         mock_anthropic.return_value.messages.create.return_value = mock_resp
         from modules.weather import weather_sentence
-        loc = {"location": "Warwick, NY", "temp": 54, "condition": "Partly Cloudy", "high": 61, "low": 44}
-        result = weather_sentence(loc, "test-key")
+        loc = {"location": "Warwick, NY", "lat": 41.2512, "temp": 54, "condition": "Partly Cloudy", "high": 61, "low": 44}
+        with patch("modules.weather.date") as mock_date:
+            mock_date.today.return_value = date(2026, 4, 19)
+            result = weather_sentence(loc, "test-key")
     assert result == "Bundle up today."
+
+    prompt = mock_anthropic.return_value.messages.create.call_args.kwargs["messages"][0]["content"]
+    assert "Today is April 19, which is spring in the Northern Hemisphere." in prompt
 
 def test_weather_sentence_returns_empty_on_failure():
     with patch("anthropic.Anthropic", side_effect=Exception("API down")):
@@ -294,3 +302,29 @@ def test_weather_sentence_returns_empty_on_failure():
         loc = {"location": "X", "temp": 50, "condition": "Clear", "high": 60, "low": 40}
         result = weather_sentence(loc, "bad-key")
     assert result == ""
+
+def test_weather_sentence_falls_back_when_model_mentions_wrong_season():
+    with patch("anthropic.Anthropic") as mock_anthropic:
+        mock_resp = MagicMock()
+        mock_resp.content = [MagicMock(text="Rain falls on Warwick today, a damp and cool autumn day.")]
+        mock_anthropic.return_value.messages.create.return_value = mock_resp
+        from modules.weather import weather_sentence
+        loc = {
+            "location": "Warwick, NY",
+            "lat": 41.2512,
+            "temp": 51,
+            "condition": "Rain",
+            "high": 51,
+            "low": 38,
+        }
+        with patch("modules.weather.date") as mock_date:
+            mock_date.today.return_value = date(2026, 4, 19)
+            result = weather_sentence(loc, "test-key")
+
+    assert result == "Rain in Warwick, NY today, with temperatures around 51°F."
+
+def test_season_for_latitude_handles_both_hemispheres():
+    from modules.weather import _season_for_latitude
+
+    assert _season_for_latitude(41.2512, date(2026, 4, 19)) == "spring"
+    assert _season_for_latitude(-33.8688, date(2026, 4, 19)) == "autumn"
