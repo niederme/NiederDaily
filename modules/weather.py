@@ -159,7 +159,11 @@ def _season_for_latitude(lat: float | None, today: date | None = None) -> str | 
 def _fallback_weather_sentence(loc: dict) -> str:
     condition = str(loc.get("condition") or "Weather")
     location = str(loc.get("location") or "today")
+    high = loc.get("high")
+    low = loc.get("low")
     temp = loc.get("temp")
+    if high is not None and low is not None:
+        return f"{condition} in {location} today, with a high near {high}\N{DEGREE SIGN}F and a low around {low}\N{DEGREE SIGN}F."
     if temp is None:
         return f"{condition} in {location} today."
     return f"{condition} in {location} today, with temperatures around {temp}\N{DEGREE SIGN}F."
@@ -254,6 +258,8 @@ def weather_sentence(loc: dict, api_key: str) -> str:
 
 DEFAULT_TRAVEL_CALENDARS = {"Little York", "niederCal", "TripIt"}
 
+LOCATION_BLACKLIST = {"harriman", "hoboken", "secaucus"}
+
 
 def weather_block(config: dict, calendar_events: list) -> dict | None:
     default = config["default_location"]
@@ -273,6 +279,9 @@ def weather_block(config: dict, calendar_events: list) -> dict | None:
             continue
         geo = geocode_location(loc)
         if geo is None:
+            continue
+        city_lower = geo["name"].split(",")[0].strip().lower()
+        if city_lower in LOCATION_BLACKLIST:
             continue
         if default["name"].split(",")[0].lower() not in geo["name"].lower():
             travel = fetch_weather(geo["lat"], geo["lon"], geo["name"].split(",")[0].strip(), config)

@@ -321,7 +321,18 @@ def test_weather_sentence_falls_back_when_model_mentions_wrong_season():
             mock_date.today.return_value = date(2026, 4, 19)
             result = weather_sentence(loc, "test-key")
 
-    assert result == "Rain in Warwick, NY today, with temperatures around 51°F."
+    assert result == "Rain in Warwick, NY today, with a high near 51°F and a low around 38°F."
+
+def test_fallback_weather_sentence_uses_current_temp_when_high_low_missing():
+    from modules.weather import _fallback_weather_sentence
+
+    result = _fallback_weather_sentence({
+        "location": "Warwick, NY",
+        "condition": "Rain",
+        "temp": 43,
+    })
+
+    assert result == "Rain in Warwick, NY today, with temperatures around 43°F."
 
 def test_season_for_latitude_handles_both_hemispheres():
     from modules.weather import _season_for_latitude
