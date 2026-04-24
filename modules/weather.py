@@ -258,7 +258,7 @@ def weather_sentence(loc: dict, api_key: str) -> str:
 
 DEFAULT_TRAVEL_CALENDARS = {"Little York", "niederCal", "TripIt"}
 
-LOCATION_BLACKLIST = {"harriman", "hoboken", "secaucus"}
+LOCATION_BLACKLIST = {"harriman", "hoboken", "secaucus", "woodbury"}
 
 
 def weather_block(config: dict, calendar_events: list) -> dict | None:
@@ -281,7 +281,7 @@ def weather_block(config: dict, calendar_events: list) -> dict | None:
         if geo is None:
             continue
         city_lower = geo["name"].split(",")[0].strip().lower()
-        if city_lower in LOCATION_BLACKLIST:
+        if any(b in city_lower for b in LOCATION_BLACKLIST):
             continue
         if default["name"].split(",")[0].lower() not in geo["name"].lower():
             travel = fetch_weather(geo["lat"], geo["lon"], geo["name"].split(",")[0].strip(), config)
