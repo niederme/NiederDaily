@@ -260,6 +260,10 @@ DEFAULT_TRAVEL_CALENDARS = {"Little York", "niederCal", "TripIt"}
 
 LOCATION_BLACKLIST = {"harriman", "hoboken", "secaucus", "woodbury"}
 
+# Event titles containing these strings are sports calendar subscriptions.
+# They should not trigger travel weather — John watches from home on TV.
+SPORTS_TITLE_BLACKLIST = {"buffalo sabres", "buffalo bills"}
+
 
 def weather_block(config: dict, calendar_events: list) -> dict | None:
     default = config["default_location"]
@@ -273,6 +277,9 @@ def weather_block(config: dict, calendar_events: list) -> dict | None:
     for event in sorted(calendar_events, key=lambda e: (e.get("all_day", True), e.get("start", ""))):
         source_calendar = event.get("calendar")
         if source_calendar not in travel_calendars:
+            continue
+        title_lower = (event.get("title") or "").lower()
+        if any(s in title_lower for s in SPORTS_TITLE_BLACKLIST):
             continue
         loc = event.get("location", "").strip()
         if not loc:

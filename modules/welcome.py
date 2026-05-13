@@ -5,6 +5,7 @@ from datetime import date
 
 SYSTEM_PROMPT = (
     "You write a single witty, warm, first-person morning greeting for a personal daily newsletter. "
+    "The newsletter belongs to John — when 'John' appears in a calendar event, that is the recipient himself, not a third party. "
     "One sentence only. Dry wit welcome. No exclamation marks. Do not start with 'Good morning.' "
     "Pick exactly ONE hook from the context and write only about that — prefer a news headline, "
     "calendar event, or memory photo over the message situation. Only use messages as a hook "
@@ -16,6 +17,14 @@ SYSTEM_PROMPT = (
 CALENDAR_NAME_NOTES = {
     "DC": "Danielle",
     "JN": "John",
+}
+
+# Maps substrings found in calendar event titles to context notes injected into the prompt.
+# Add entries here whenever the AI gets something wrong about a recurring person or event.
+EVENT_CONTEXT = {
+    "Allison": "Allison is John's therapist — 'Allison and John's session' is a weekly therapy appointment.",
+    "Buffalo Sabres": "Buffalo Sabres games appear from a subscribed sports calendar — John watches from home on TV unless other calendar events show he is traveling to that game's city.",
+    "Buffalo Bills": "Buffalo Bills games appear from a subscribed sports calendar — John watches from home on TV unless other calendar events show he is traveling to that game's city.",
 }
 
 
@@ -57,6 +66,14 @@ def welcome_block(
             ]
             if matched_notes:
                 parts.append("Calendar shorthand: " + "; ".join(matched_notes) + ".")
+
+            matched_context = [
+                note
+                for keyword, note in EVENT_CONTEXT.items()
+                if keyword in titles
+            ]
+            if matched_context:
+                parts.append("Context: " + " ".join(matched_context))
 
         if nyt_stories:
             titles = " / ".join(f'"{s["title"]}"' for s in nyt_stories[:3] if s.get("title"))
