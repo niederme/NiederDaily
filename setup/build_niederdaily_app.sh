@@ -41,4 +41,24 @@ xcrun swift "${ICON_SCRIPT}" "${ICONSET_DIR}"
 iconutil -c icns "${ICONSET_DIR}" -o "${RESOURCES_DIR}/AppIcon.icns"
 touch "${APP_DIR}"
 
+# --- Code signing -------------------------------------------------------------
+# Sign with a STABLE identity so macOS privacy (TCC) grants -- Calendar,
+# Reminders, and Full Disk Access (Messages chat.db) -- survive rebuilds.
+# swiftc applies an ad-hoc signature whose cdhash changes on every build, which
+# silently revokes those grants for the scheduled launchd run (the app then
+# can't read calendar/messages and the morning digest loses all personal
+# context). A stable cert keeps the designated requirement constant across
+# rebuilds and annual cert renewals, so the grant persists.
+SIGN_IDENTITY="${NIEDERDAILY_SIGN_IDENTITY:-Apple Development: John Niedermeyer (9473SD42A5)}"
+if security find-identity -v -p codesigning | grep -qF "${SIGN_IDENTITY}"; then
+  codesign --force --sign "${SIGN_IDENTITY}" \
+    --identifier me.nieder.NiederDaily --timestamp=none "${APP_DIR}"
+  codesign --verify --strict "${APP_DIR}"
+  echo "Signed ${APP_DIR} with: ${SIGN_IDENTITY}"
+else
+  echo "WARNING: signing identity '${SIGN_IDENTITY}' not found." >&2
+  echo "         App is ad-hoc signed and will LOSE Calendar/Reminders/Messages" >&2
+  echo "         TCC grants on the next rebuild. Set NIEDERDAILY_SIGN_IDENTITY to override." >&2
+fi
+
 echo "Built ${APP_DIR}"
