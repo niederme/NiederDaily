@@ -145,13 +145,12 @@ def preflight():
     )
 
     # Messages / chat.db
-    from modules.messages import DB_PATH
-    from pathlib import Path as P
+    from modules.messages import messages_db_readable
     report(
         "Messages",
-        P(DB_PATH).exists(),
+        messages_db_readable(),
         " (chat.db readable — Full Disk Access granted)",
-        "chat.db not accessible — grant Full Disk Access to Terminal in System Settings → Privacy & Security. The newsletter will skip this section until access is granted.",
+        "chat.db not accessible — add NiederDaily.app to Full Disk Access in System Settings → Privacy & Security → Full Disk Access. The newsletter will skip this section until access is granted.",
         blocking=False,
     )
 

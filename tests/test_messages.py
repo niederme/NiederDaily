@@ -1,11 +1,16 @@
 import sqlite3
 import time as time_module
 
+import sys
+import types
+
 from modules.messages import (
     _fallback_summary,
     _merge_threads,
     messages_block,
+    messages_db_readable,
     needs_reply,
+    resolve_contact,
 )
 
 
@@ -40,6 +45,67 @@ def test_needs_reply_false_within_2_hours():
 def test_messages_block_returns_none_when_db_missing(mocker):
     mocker.patch("modules.messages.DB_PATH", "/nonexistent/chat.db")
     assert messages_block() is None
+
+
+def test_messages_db_readable_true_for_real_db(mocker, tmp_path):
+    db = tmp_path / "chat.db"
+    con = sqlite3.connect(str(db))
+    con.execute("CREATE TABLE message (ROWID INTEGER PRIMARY KEY)")
+    con.close()
+    mocker.patch("modules.messages.DB_PATH", str(db))
+    assert messages_db_readable() is True
+
+
+def test_messages_db_readable_false_when_missing(mocker):
+    mocker.patch("modules.messages.DB_PATH", "/nonexistent/chat.db")
+    assert messages_db_readable() is False
+
+
+def test_messages_db_readable_false_for_missing_file_in_existing_dir(mocker, tmp_path):
+    # Regression: immutable=1 alone opens rw-create and would create + report True.
+    missing = tmp_path / "missing-chat.db"
+    mocker.patch("modules.messages.DB_PATH", str(missing))
+    assert messages_db_readable() is False
+    assert not missing.exists()
+
+
+def test_resolve_contact_survives_none_stop_pointer(mocker):
+    """PyObjC passes the block's BOOL* stop pointer as None in this runtime;
+    resolving a match must not crash trying to assign stop_ptr[0]."""
+    mocker.patch("modules.messages.contacts_access_granted", return_value=True)
+
+    phone = types.SimpleNamespace(
+        value=lambda: types.SimpleNamespace(stringValue=lambda: "+15555550101")
+    )
+    contact = types.SimpleNamespace(
+        phoneNumbers=lambda: [phone],
+        emailAddresses=lambda: [],
+        givenName=lambda: "Jane",
+        familyName=lambda: "Doe",
+    )
+
+    class FakeStore:
+        def enumerateContactsWithFetchRequest_error_usingBlock_(self, request, error, block):
+            block(contact, None)  # None stop pointer is the bug trigger
+
+    fake_request = types.SimpleNamespace()
+    fake_contacts = types.SimpleNamespace(
+        CNContactGivenNameKey="g",
+        CNContactFamilyNameKey="f",
+        CNContactPhoneNumbersKey="p",
+        CNContactEmailAddressesKey="e",
+        CNContactStore=types.SimpleNamespace(
+            alloc=lambda: types.SimpleNamespace(init=lambda: FakeStore())
+        ),
+        CNContactFetchRequest=types.SimpleNamespace(
+            alloc=lambda: types.SimpleNamespace(
+                initWithKeysToFetch_=lambda keys: fake_request
+            )
+        ),
+    )
+    mocker.patch.dict(sys.modules, {"Contacts": fake_contacts})
+
+    assert resolve_contact("+15555550101") == "Jane Doe"
 
 
 def test_merge_threads_collapses_same_handle():

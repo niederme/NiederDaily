@@ -169,6 +169,29 @@ def _chat_has_column(con: sqlite3.Connection, table: str, column: str) -> bool:
     return column in names
 
 
+def messages_db_readable() -> bool:
+    """True only if the Messages chat.db can actually be opened.
+
+    Path existence is NOT sufficient: reading chat.db requires Full Disk Access,
+    and a process without it can stat the file but cannot open it. This performs
+    the same read the digest does, so preflight reflects the real run instead of
+    reporting a false positive.
+    """
+    # mode=ro is essential: without it sqlite opens read-write-create and would
+    # silently CREATE a stub chat.db for a missing/denied path and report True.
+    try:
+        con = sqlite3.connect(f"file:{DB_PATH}?mode=ro&immutable=1", uri=True)
+    except Exception:
+        return False
+    try:
+        con.execute("SELECT 1 FROM sqlite_master LIMIT 1").fetchone()
+        return True
+    except Exception:
+        return False
+    finally:
+        con.close()
+
+
 def _threads_from_db() -> list | None:
     try:
         con = sqlite3.connect(f"file:{DB_PATH}?immutable=1", uri=True)
