@@ -105,14 +105,16 @@ def resolve_contact(handle_id: str) -> str | None:
                         first = contact.givenName() or ""
                         last = contact.familyName() or ""
                         match["name"] = f"{first} {last}".strip() or None
-                        stop_ptr[0] = True
+                        if stop_ptr is not None:
+                            stop_ptr[0] = True
                         return
                 for email in contact.emailAddresses() or []:
                     if str(email.value()).lower() == handle_id.lower():
                         first = contact.givenName() or ""
                         last = contact.familyName() or ""
                         match["name"] = f"{first} {last}".strip() or None
-                        stop_ptr[0] = True
+                        if stop_ptr is not None:
+                            stop_ptr[0] = True
                         return
 
             store.enumerateContactsWithFetchRequest_error_usingBlock_(request, None, visit)
