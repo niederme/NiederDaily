@@ -182,7 +182,21 @@ def _has_conflicting_season(text: str, expected_season: str | None) -> bool:
     return False
 
 
+def _is_geocodable(location_str: str) -> bool:
+    """Calendar location fields often hold phone numbers or video-call URLs.
+    Nominatim happily resolves digit strings to far-away places ('(845) 986-2058'
+    once geocoded to Tervola, Finland), so only place-like text may be geocoded."""
+    s = location_str.strip().lower()
+    if "://" in s or s.startswith("www.") or s.startswith("tel:"):
+        return False
+    if sum(c.isalpha() for c in s) < 3:
+        return False  # phone numbers and other digit/punctuation strings
+    return True
+
+
 def geocode_location(location_str: str) -> dict | None:
+    if not _is_geocodable(location_str):
+        return None
     try:
         resp = requests.get(NOMINATIM_URL, params={
             "q": location_str, "format": "json", "limit": 1, "addressdetails": 1,

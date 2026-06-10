@@ -221,6 +221,23 @@ def test_geocode_location_returns_none_on_no_results(requests_mock):
     result = geocode_location("Nowhere")
     assert result is None
 
+def test_geocode_location_rejects_phone_numbers(requests_mock):
+    """Phone numbers in the location field must never hit Nominatim — it happily
+    resolves digit strings to random places ('(845) 986-2058' → Tervola, Finland)."""
+    nominatim = requests_mock.get("https://nominatim.openstreetmap.org/search", json=NOMINATIM_RESPONSE)
+    from modules.weather import geocode_location
+    assert geocode_location("(845) 986-2058") is None
+    assert geocode_location("+1 845-986-2058") is None
+    assert nominatim.called is False
+
+def test_geocode_location_rejects_urls(requests_mock):
+    """Video-call URLs in the location field are not places."""
+    nominatim = requests_mock.get("https://nominatim.openstreetmap.org/search", json=NOMINATIM_RESPONSE)
+    from modules.weather import geocode_location
+    assert geocode_location("https://nyulangone.app/DjV9nemdDab?csn=1061475041") is None
+    assert geocode_location("www.zoom.us/j/123456") is None
+    assert nominatim.called is False
+
 # ── weather_block tests ───────────────────────────────────────────────────────
 
 def test_weather_block_default_only(requests_mock):
@@ -256,6 +273,24 @@ def test_weather_block_with_travel(requests_mock):
 
     assert len(result["locations"]) == 2
     assert result["travel_city"] == "New York"
+
+def test_weather_block_skips_phone_number_event_location(requests_mock):
+    """Regression: a pediatrics appointment with a phone-number location triggered
+    travel weather for Tervola, Finland."""
+    requests_mock.get(
+        "https://weatherkit.apple.com/api/v1/weather/en/41.2512/-74.3607",
+        json=WEATHERKIT_RESPONSE,
+    )
+    nominatim = requests_mock.get("https://nominatim.openstreetmap.org/search", json=NOMINATIM_RESPONSE)
+    with patch("modules.weather._make_jwt", return_value="tok"):
+        from modules.weather import weather_block
+        events = [{"title": "Call Kania Pediatrics to make appt", "location": "(845) 986-2058",
+                   "all_day": False, "start": "7:30am", "calendar": "Little York"}]
+        result = weather_block(WEATHERKIT_CONFIG, calendar_events=events)
+
+    assert len(result["locations"]) == 1
+    assert result["travel_city"] is None
+    assert nominatim.called is False
 
 def test_weather_block_ignores_events_from_non_travel_calendars(requests_mock):
     requests_mock.get(
