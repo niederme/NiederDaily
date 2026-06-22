@@ -88,6 +88,30 @@ def test_welcome_block_passes_calendar_name_notes_to_prompt(mocker):
     assert "DC means Danielle" in prompt_text
 
 
+def test_welcome_block_does_not_privilege_first_calendar_event(mocker):
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = MagicMock(
+        content=[MagicMock(text="Dinner has acquired the burden of being today's plot.")]
+    )
+    mocker.patch("modules.welcome.anthropic.Anthropic", return_value=mock_client)
+    events = [
+        {"time": "7:30am", "title": "Get Alaia on the bus", "all_day": False},
+        {"time": "6:30pm", "title": "Dinner with Maya", "all_day": False},
+    ]
+
+    welcome_block("sk-ant-test", weather_data=WEATHER, calendar_events=events)
+
+    call_args = mock_client.messages.create.call_args
+    prompt_text = call_args.kwargs["messages"][0]["content"]
+    system_text = call_args.kwargs["system"]
+    assert "First event:" not in prompt_text
+    assert "[CANDIDATE] Dinner with Maya" in prompt_text
+    assert prompt_text.index("Dinner with Maya") < prompt_text.index("Get Alaia on the bus")
+    assert "[ROUTINE] Get Alaia on the bus" in prompt_text
+    assert "ordinary recurring logistics" in prompt_text
+    assert "do not favor an event because it is first or early" in system_text
+
+
 def test_welcome_block_includes_message_summary_in_prompt(mocker):
     mock_client = MagicMock()
     mock_client.messages.create.return_value = MagicMock(

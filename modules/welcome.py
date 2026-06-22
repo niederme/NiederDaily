@@ -10,6 +10,9 @@ SYSTEM_PROMPT = (
     "Pick exactly ONE hook from the context and write only about that — prefer a news headline, "
     "calendar event, or memory photo over the message situation. Only use messages as a hook "
     "if nothing else is interesting. When you do use messages, keep it warm and light, not snarky. "
+    "Calendar order is chronological, not editorial: do not favor an event because it is first or early. "
+    "Treat events labeled ROUTINE as low-interest background and avoid using them when any worthwhile "
+    "news, memory photo, non-routine event, travel, or remarkable weather is available. "
     "Do not combine multiple hooks. Do not connect unrelated pieces of context. "
     "Mention weather only if genuinely remarkable. Do not summarize the day — find one angle and commit to it."
 )
@@ -22,10 +25,20 @@ CALENDAR_NAME_NOTES = {
 # Maps substrings found in calendar event titles to context notes injected into the prompt.
 # Add entries here whenever the AI gets something wrong about a recurring person or event.
 EVENT_CONTEXT = {
+    "Alaia": "Alaia is the neighbor's child. John helps get her on the school bus twice a week; this is ordinary recurring logistics, not a notable occasion.",
     "Allison": "Allison is John's therapist — 'Allison and John's session' is a weekly therapy appointment.",
     "Buffalo Sabres": "Buffalo Sabres games appear from a subscribed sports calendar — John watches from home on TV unless other calendar events show he is traveling to that game's city.",
     "Buffalo Bills": "Buffalo Bills games appear from a subscribed sports calendar — John watches from home on TV unless other calendar events show he is traveling to that game's city.",
 }
+
+ROUTINE_EVENT_KEYWORDS = (
+    "Alaia",
+)
+
+
+def _is_routine_event(event: dict) -> bool:
+    title = event.get("title") or ""
+    return any(keyword.casefold() in title.casefold() for keyword in ROUTINE_EVENT_KEYWORDS)
 
 
 def welcome_block(
@@ -55,8 +68,20 @@ def welcome_block(
 
         if calendar_events:
             timed = [e for e in calendar_events if not e.get("all_day")]
-            if timed:
-                parts.append(f"First event: {timed[0]['title']} at {timed[0]['time']}.")
+            all_day = [e for e in calendar_events if e.get("all_day")]
+            ordered = (
+                [e for e in timed if not _is_routine_event(e)]
+                + [e for e in all_day if not _is_routine_event(e)]
+                + [e for e in timed if _is_routine_event(e)]
+                + [e for e in all_day if _is_routine_event(e)]
+            )
+            if ordered:
+                event_lines = []
+                for event in ordered[:6]:
+                    priority = "ROUTINE" if _is_routine_event(event) else "CANDIDATE"
+                    when = "all day" if event.get("all_day") else event.get("time", "time unknown")
+                    event_lines.append(f"[{priority}] {event['title']} ({when})")
+                parts.append("CALENDAR OPTIONS, ranked by editorial interest: " + " / ".join(event_lines) + ".")
 
             titles = " ".join((e.get("title") or "") for e in calendar_events)
             matched_notes = [
