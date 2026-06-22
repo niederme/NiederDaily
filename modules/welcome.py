@@ -13,6 +13,8 @@ SYSTEM_PROMPT = (
     "Calendar order is chronological, not editorial: do not favor an event because it is first or early. "
     "Treat events labeled ROUTINE as low-interest background and avoid using them when any worthwhile "
     "news, memory photo, non-routine event, travel, or remarkable weather is available. "
+    "A birthday calendar entry belongs to the person named in its title. Never call it John's birthday "
+    "or say 'your birthday' unless the title explicitly says 'John's birthday' or names John Niedermeyer. "
     "Do not combine multiple hooks. Do not connect unrelated pieces of context. "
     "Mention weather only if genuinely remarkable. Do not summarize the day — find one angle and commit to it."
 )

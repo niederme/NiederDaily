@@ -67,6 +67,7 @@ def nyt_block(api_key: str | None) -> list | None:
             "title": s.get("title", ""),
             "abstract": s.get("abstract", ""),
             "byline": s.get("byline", ""),
+            "published_date": s.get("published_date", ""),
             "url": s.get("url", ""),
             "thumbnail": _pick_thumbnail(s.get("multimedia", [])) or _pick_media_thumbnail(s.get("media", [])),
         }

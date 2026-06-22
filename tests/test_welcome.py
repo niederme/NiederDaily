@@ -112,6 +112,23 @@ def test_welcome_block_does_not_privilege_first_calendar_event(mocker):
     assert "do not favor an event because it is first or early" in system_text
 
 
+def test_welcome_block_does_not_assign_other_birthdays_to_recipient(mocker):
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = MagicMock(
+        content=[MagicMock(text="Someone else gets the candles today.")]
+    )
+    mocker.patch("modules.welcome.anthropic.Anthropic", return_value=mock_client)
+    events = [{"time": None, "title": "Sarah's Birthday", "all_day": True}]
+
+    welcome_block("sk-ant-test", weather_data=WEATHER, calendar_events=events)
+
+    call_args = mock_client.messages.create.call_args
+    system_text = call_args.kwargs["system"]
+    assert "birthday calendar entry belongs to the person named in its title" in system_text
+    assert "Never call it John's birthday" in system_text
+    assert "names John Niedermeyer" in system_text
+
+
 def test_welcome_block_includes_message_summary_in_prompt(mocker):
     mock_client = MagicMock()
     mock_client.messages.create.return_value = MagicMock(

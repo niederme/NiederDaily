@@ -10,6 +10,7 @@ NYT_RESPONSE = {
             "title": "Big Story One",
             "abstract": "Something important happened.",
             "byline": "By Reporter One",
+            "published_date": "2026-06-21",
             "url": "https://nytimes.com/story1",
             "multimedia": [{"url": "https://static.nyt.com/img1.jpg", "format": "threeByTwoSmallAt2X"}],
         },
@@ -43,6 +44,7 @@ def test_nyt_block_includes_thumbnail_url(requests_mock):
     result = nyt_block("test-key")
     assert result[0]["thumbnail"] == "https://static.nyt.com/img1.jpg"
     assert result[0]["byline"] == "By Reporter One"
+    assert result[0]["published_date"] == "2026-06-21"
 
 def test_nyt_block_uses_media_metadata_thumbnail_when_multimedia_missing(requests_mock):
     requests_mock.get(NYT_URL, json=NYT_RESPONSE)

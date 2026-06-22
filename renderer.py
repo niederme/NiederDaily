@@ -58,7 +58,7 @@ a{color:#121212;}
 .nytthumb{width:175px;height:117px;object-fit:cover;object-position:right center;flex-shrink:0;background:#f5efe5;}
 .nythed{font-size:17px;font-weight:700;line-height:1.18;color:#121212;margin-bottom:6px;}
 .nytdek{font-size:13px;color:#474a51;line-height:1.42;}
-.nytbyline{font-size:11px;color:#474a51;line-height:1.4;margin-top:7px;}
+.nytmeta{font-size:10px;color:#6d7178;line-height:1.4;letter-spacing:0.025em;text-transform:uppercase;margin-top:7px;}
 .photo-module{max-width:520px;margin:0 auto;}
 .photo-frame{display:block;border-radius:14px;overflow:hidden;border:1px solid rgba(214,208,198,0.7);background:#ffffff;line-height:0;}
 .photo-frame img{width:100%;display:block;}
@@ -95,7 +95,7 @@ a{color:#121212;}
   .nytthumb{display:block !important;width:112px !important;height:75px !important;max-width:none !important;flex-shrink:0 !important;margin:0 !important;}
   .nythed{font-size:16px !important;margin-bottom:5px !important;}
   .nytdek{font-size:12px !important;line-height:1.45 !important;}
-  .nytbyline{font-size:11px !important;margin-top:6px !important;}
+  .nytmeta{font-size:11px !important;margin-top:6px !important;}
   .photo-meta{font-size:11px !important;gap:8px !important;}
 }
 """
@@ -347,13 +347,27 @@ def _nyt_html(stories: list, *, show_rule: bool = True) -> str:
         img = ""
         if s.get("thumbnail"):
             img = f'<img class="nytthumb" src="{_esc(s["thumbnail"])}" alt="">'
-        byline = ""
+        meta_bits = []
+        published_date = s.get("published_date")
+        if published_date:
+            try:
+                published = date.fromisoformat(published_date)
+                age_days = (date.today() - published).days
+                if age_days == 0:
+                    meta_bits.append("Today")
+                elif age_days > 0:
+                    meta_bits.append(f"{age_days}d ago")
+                else:
+                    meta_bits.append(published.strftime("%b %-d, %Y"))
+            except (TypeError, ValueError):
+                meta_bits.append(str(published_date))
         if s.get("byline"):
-            byline = f'<div class="nytbyline">{_esc(s["byline"])}</div>'
+            meta_bits.append(s["byline"])
+        meta = f'<div class="nytmeta">{_esc(" · ".join(meta_bits))}</div>' if meta_bits else ""
         rows.append(
             f'<div class="nyt"><a class="nyt-link" href="{_esc(s["url"])}">'
             f'<div style="flex:1;"><div class="nythed">{_esc(s["title"])}</div>'
-            f'<div class="nytdek">{_esc(s["abstract"])}</div>{byline}</div>{img}</a></div>'
+            f'<div class="nytdek">{_esc(s["abstract"])}</div>{meta}</div>{img}</a></div>'
         )
     return _section("In Case You Missed It", "".join(rows), show_rule=show_rule)
 

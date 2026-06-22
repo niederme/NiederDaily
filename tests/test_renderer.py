@@ -1,5 +1,6 @@
 import pytest
 import sys
+from datetime import date, timedelta
 from pathlib import Path
 
 from renderer import render_email
@@ -13,7 +14,7 @@ MESSAGES = {
     "needs_reply_count": 1,
 }
 PHOTO = (b'\xff\xd8\xff' + b'\x00' * 100, {"year": "2019", "date": "2019-03-25", "location": "Warwick, NY", "is_favorite": True, "title": "Downtown selfie", "description": "Flash photo after drinks.", "keywords": ["friends", "night"], "filename": "IMG_1234.JPG", "face_count": 2})
-NYT = [{"title": "Story One", "abstract": "Things happened.", "byline": "By Reporter One", "url": "https://nytimes.com/1", "thumbnail": None}]
+NYT = [{"title": "Story One", "abstract": "Things happened.", "byline": "By Reporter One", "published_date": (date.today() - timedelta(days=1)).isoformat(), "url": "https://nytimes.com/1", "thumbnail": None}]
 
 
 def _html_from_message(msg) -> str:
@@ -149,7 +150,10 @@ def test_render_nyt_without_thumbnail_has_no_placeholder_block():
     )
     html = _html_from_message(msg)
     assert 'class="nytthumb"' not in html
+    assert "1d ago" in html
     assert "By Reporter One" in html
+    assert "1d ago · By Reporter One" in html
+    assert "text-transform:uppercase" in html
 
 
 def test_render_places_photo_before_news():
