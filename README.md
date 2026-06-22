@@ -156,16 +156,23 @@ will run preflight/prompt mode so macOS can present missing permission dialogs w
 
 ## Running
 
-### Manual send
+### Manual send through the app
 
 ```bash
-./.venv/bin/python niederdaily.py
+open -W -n -gj ~/Applications/NiederDaily.app --args --run
 ```
+
+Launch the app bundle through `open`, not its executable directly. LaunchServices
+then attributes the Python child process to NiederDaily's signed app identity, so
+macOS applies its Calendar, Reminders, Photos, Contacts, and Full Disk Access
+permissions. Running `niederdaily.py` directly is useful for code-only debugging,
+but protected local modules may be omitted.
 
 ### Rebuild and run the app wrapper
 
 ```bash
-bash ~/~Repos/NiederDaily/setup/build_niederdaily_app.sh && /Users/niederme/Applications/NiederDaily.app/Contents/MacOS/NiederDaily --run
+bash ~/~Repos/NiederDaily/setup/build_niederdaily_app.sh \
+  && open -W -n -gj ~/Applications/NiederDaily.app --args --run
 ```
 
 Use this when you've changed the source and want to rebuild the wrapper app and immediately trigger a real send through it — the same execution path `launchd` uses. This is the right test before trusting a scheduled run, because the wrapper app is what holds TCC permissions for Calendar, Reminders, Photos, and Messages. Running Python directly bypasses that app identity and may silently miss those modules.
@@ -183,13 +190,15 @@ The repo includes:
 - a launch agent template at [`setup/me.nieder.daily.plist.template`](/Users/niederme/~Repos/NiederDaily/setup/me.nieder.daily.plist.template)
 - an app builder at [`setup/build_niederdaily_app.sh`](/Users/niederme/~Repos/NiederDaily/setup/build_niederdaily_app.sh)
 
-The launch agent is intended to run the app wrapper executable directly:
+The launch agent plist runs the app wrapper executable directly under `launchd`:
 
 ```bash
 ~/Applications/NiederDaily.app/Contents/MacOS/NiederDaily --run
 ```
 
-Manual app opens are for preflight and permission prompts; scheduled launches pass `--run` for the real send path.
+That path is correct inside the registered LaunchAgent, where macOS tracks the
+signed bundle as the responsible process. Do not copy it as a manual shell
+command; manual launches should use `open` as shown above.
 
 On newer macOS versions, prefer `bootstrap`/`bootout` over `launchctl load`:
 

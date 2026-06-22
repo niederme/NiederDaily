@@ -62,3 +62,5 @@ else
 fi
 
 echo "Built ${APP_DIR}"
+echo "Run with macOS privacy permissions:"
+echo "  open -W -n -gj \"${APP_DIR}\" --args --run"
