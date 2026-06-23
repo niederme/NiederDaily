@@ -129,6 +129,32 @@ def test_welcome_block_does_not_assign_other_birthdays_to_recipient(mocker):
     assert "names John Niedermeyer" in system_text
 
 
+def test_welcome_block_includes_authored_tweet_in_prompt(mocker):
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = MagicMock(
+        content=[MagicMock(text="Three years ago I had opinions about shipping; today I have a calendar.")]
+    )
+    mocker.patch("modules.welcome.anthropic.Anthropic", return_value=mock_client)
+    tweet = {"text": "Shipping beats perfect.", "source": "authored", "year": "2021", "handle": "john"}
+    welcome_block("sk-ant-test", weather_data=WEATHER, calendar_events=EVENTS, tweet=tweet)
+    prompt_text = mock_client.messages.create.call_args.kwargs["messages"][0]["content"]
+    assert "YOUR TWEET on this day in 2021" in prompt_text
+    assert "Shipping beats perfect." in prompt_text
+
+
+def test_welcome_block_includes_bookmarked_tweet_in_prompt(mocker):
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = MagicMock(
+        content=[MagicMock(text="Someone smarter than me bookmarked a thought worth stealing.")]
+    )
+    mocker.patch("modules.welcome.anthropic.Anthropic", return_value=mock_client)
+    tweet = {"text": "Local-first is the future.", "source": "bookmarked", "handle": "steipete"}
+    welcome_block("sk-ant-test", weather_data=WEATHER, calendar_events=EVENTS, tweet=tweet)
+    prompt_text = mock_client.messages.create.call_args.kwargs["messages"][0]["content"]
+    assert "TWEET YOU BOOKMARKED (by @steipete)" in prompt_text
+    assert "Local-first is the future." in prompt_text
+
+
 def test_welcome_block_includes_message_summary_in_prompt(mocker):
     mock_client = MagicMock()
     mock_client.messages.create.return_value = MagicMock(

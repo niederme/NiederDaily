@@ -165,6 +165,54 @@ def test_render_places_photo_before_news():
     assert html.index("On This Day") < html.index("Story One")
 
 
+TWEET_AUTHORED = {
+    "id": "555", "text": "Shipping beats perfect.", "handle": "john",
+    "display_name": "John", "date": "2021-06-23", "year": "2021",
+    "like_count": 12, "url": "https://twitter.com/john/status/555", "source": "authored",
+}
+TWEET_BOOKMARK = {
+    "id": "777", "text": "Local-first software is the future.", "handle": "steipete",
+    "display_name": "Peter Steinberger", "date": "2026-06-20", "year": "2026",
+    "like_count": 1240, "url": "https://twitter.com/steipete/status/777", "source": "bookmarked",
+}
+
+
+def test_render_includes_authored_tweet():
+    msg = render_email(
+        recipient="me@example.com", welcome=None,
+        weather=None, calendar=None, reminders=None, messages=None, photo=None, nyt=None,
+        tweet=TWEET_AUTHORED,
+    )
+    html = _html_from_message(msg)
+    assert "You Tweeted · 2021" in html
+    assert "Shipping beats perfect." in html
+    assert "https://twitter.com/john/status/555" in html
+
+
+def test_render_bookmarked_tweet_heading_and_author():
+    msg = render_email(
+        recipient="me@example.com", welcome=None,
+        weather=None, calendar=None, reminders=None, messages=None, photo=None, nyt=None,
+        tweet=TWEET_BOOKMARK,
+    )
+    html = _html_from_message(msg)
+    assert "From Your Bookmarks" in html
+    assert "Peter Steinberger" in html
+    assert "@steipete" in html
+    assert "1,240 likes" in html
+
+
+def test_render_places_tweet_between_photo_and_news():
+    msg = render_email(
+        recipient="me@example.com", welcome=None,
+        weather=None, calendar=None, reminders=None, messages=None,
+        photo=PHOTO, nyt=NYT, tweet=TWEET_AUTHORED,
+    )
+    html = _html_from_message(msg)
+    assert html.index("On This Day") < html.index("You Tweeted")
+    assert html.index("You Tweeted") < html.index("Story One")
+
+
 def test_render_calendar_section_includes_event_title():
     msg = render_email(
         recipient="me@example.com", welcome=None,
