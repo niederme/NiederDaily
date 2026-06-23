@@ -148,7 +148,7 @@ def _time_sort_key(event):
         return 0
 
 
-def calendar_block(calendars: list | None = None) -> list | None:
+def calendar_block(calendars: list | None = None, as_of: date | None = None) -> list | None:
     if EventKit is None:
         log.warning("Calendar block unavailable: EventKit framework not installed")
         return None
@@ -162,7 +162,7 @@ def calendar_block(calendars: list | None = None) -> list | None:
         if not selected:
             return []
 
-        start_dt = datetime.combine(date.today(), time.min)
+        start_dt = datetime.combine(as_of or date.today(), time.min)
         end_dt = start_dt + timedelta(days=1)
         predicate = store.predicateForEventsWithStartDate_endDate_calendars_(
             _nsdate_for_local(start_dt),

@@ -241,11 +241,11 @@ def photo_access_granted(prompt: bool = False) -> bool:
     return result["status"] in _photo_readable_statuses()
 
 
-def _native_photo_block() -> tuple | None:
+def _native_photo_block(as_of: date | None = None) -> tuple | None:
     if Photos is None or not photo_access_granted():
         return None
 
-    today = date.today()
+    today = as_of or date.today()
     try:
         options = Photos.PHFetchOptions.alloc().init()
         options.setSortDescriptors_([NSSortDescriptor.sortDescriptorWithKey_ascending_("creationDate", True)])
@@ -354,8 +354,8 @@ def _native_photo_block() -> tuple | None:
         return None
 
 
-def _applescript_photo_block() -> tuple | None:
-    today = date.today()
+def _applescript_photo_block(as_of: date | None = None) -> tuple | None:
+    today = as_of or date.today()
     script = LIST_SCRIPT_TEMPLATE.format(month=today.month, day=today.day)
     try:
         result = subprocess.run(
@@ -498,8 +498,8 @@ def _resize_for_email(img_bytes: bytes, img_fmt: str, max_px: int = 1200) -> tup
     return img_bytes, img_fmt
 
 
-def photo_block(api_key: str | None = None) -> tuple | None:
-    result = _native_photo_block() or _applescript_photo_block()
+def photo_block(api_key: str | None = None, as_of: date | None = None) -> tuple | None:
+    result = _native_photo_block(as_of) or _applescript_photo_block(as_of)
     if result is None:
         return None
     img_bytes, meta = result

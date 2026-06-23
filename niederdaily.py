@@ -36,7 +36,7 @@ def run(config_path: str = None, as_of=None):
 
     # Step 1 & 2: gather weather and calendar first (needed by welcome)
     weather = _safe(weather_block, conf, calendar_events=[])
-    calendar = _safe(calendar_block, conf.get("calendars"))
+    calendar = _safe(calendar_block, conf.get("calendars"), as_of=as_of)
 
     # Re-run weather with calendar events for travel detection
     if calendar:
@@ -48,16 +48,17 @@ def run(config_path: str = None, as_of=None):
             loc["sentence"] = weather_sentence(loc, conf["anthropic_api_key"])
 
     # Steps 3-6: independent modules
-    reminders = _safe(reminders_block, conf.get("reminders_lists", []))
+    reminders = _safe(reminders_block, conf.get("reminders_lists", []), as_of=as_of)
     messages  = _safe(messages_block, conf["anthropic_api_key"])
-    photo     = _safe(photo_block, conf["anthropic_api_key"])
+    photo     = _safe(photo_block, conf["anthropic_api_key"], as_of=as_of)
     tweet     = _safe(tweet_block, as_of=as_of)
     nyt       = _safe(nyt_block, conf.get("nyt_api_key"))
 
     # Step 7: welcome uses all available context to pick the best hook
     welcome = _safe(welcome_block, conf["anthropic_api_key"],
                     weather_data=weather, calendar_events=calendar,
-                    nyt_stories=nyt, photo=photo, messages=messages, tweet=tweet)
+                    nyt_stories=nyt, photo=photo, messages=messages, tweet=tweet,
+                    as_of=as_of)
 
     msg = render_email(
         recipient=conf["recipient_email"],
@@ -270,7 +271,9 @@ if __name__ == "__main__":
     parser.add_argument("--config", default=None)
     parser.add_argument("--date", default=None,
                         help="Override 'today' (YYYY-MM-DD) — send the newsletter as if it were this date. "
-                             "Affects the on-this-day tweet pick and the email's date line.")
+                             "Affects the date-driven modules: tweet + photo on-this-day, calendar and "
+                             "reminders for that day, the welcome greeting, and the email's date line. "
+                             "Weather and NYT are always live (no historical data).")
     args = parser.parse_args()
 
     as_of = None

@@ -51,13 +51,14 @@ def welcome_block(
     photo: tuple | None = None,
     messages: dict | None = None,
     tweet: dict | None = None,
+    as_of: date | None = None,
 ) -> str | None:
     if not api_key:
         return None
     if not weather_data and not calendar_events:
         return None
     try:
-        today = date.today()
+        today = as_of or date.today()
         day_name = today.strftime("%A")
         date_str = today.strftime("%B %-d, %Y")
 

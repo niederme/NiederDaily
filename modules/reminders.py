@@ -152,7 +152,7 @@ def _list_color(reminder) -> str | None:
     return None
 
 
-def reminders_block(lists: list | None = None) -> dict | None:
+def reminders_block(lists: list | None = None, as_of: date | None = None) -> dict | None:
     if EventKit is None:
         log.warning("Reminders block unavailable: EventKit framework not installed")
         return None
@@ -166,7 +166,7 @@ def reminders_block(lists: list | None = None) -> dict | None:
         if not selected:
             return {"overdue": [], "today": [], "upcoming": []}
 
-        today = date.today()
+        today = as_of or date.today()
         cutoff = today + timedelta(days=7)
         end_dt = datetime.combine(cutoff + timedelta(days=1), time.min)
         predicate = store.predicateForIncompleteRemindersWithDueDateStarting_ending_calendars_(
