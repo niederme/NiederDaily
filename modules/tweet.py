@@ -127,14 +127,26 @@ def _on_this_day_authored(as_of: date | None = None) -> dict | None:
     return matches[0][1]
 
 
+def _is_self_authored(row: dict) -> bool:
+    """True when the tweet's author is the account owner — i.e. John liked or
+    bookmarked his own tweet. Those belong in the on-this-day 'You Tweeted'
+    path, not the 'a tweet you liked/bookmarked' fallback."""
+    author = ((row.get("author") or {}).get("handle") or "").lstrip("@").lower()
+    account = (row.get("accountHandle") or "").lstrip("@").lower()
+    return bool(author and account and author == account)
+
+
 def _recent_save() -> dict | None:
-    """Fallback: the most recent thing John bookmarked, else liked."""
+    """Fallback: the most recent thing John bookmarked, else liked — excluding
+    his own tweets, which only make sense in the on-this-day section."""
     for flag, source in (("--bookmarked", "bookmarked"), ("--liked", "liked")):
         rows = _run_search([flag, "--limit", str(FALLBACK_LIMIT)])
         if not rows:
             continue
         candidates: list[tuple[float, dict]] = []
         for row in rows:
+            if _is_self_authored(row):
+                continue
             normalized = _normalize(row, source)
             if not normalized:
                 continue

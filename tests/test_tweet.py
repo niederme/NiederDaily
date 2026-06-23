@@ -8,10 +8,10 @@ from modules.tweet import tweet_block
 
 
 def _row(text, *, tweet_id="1", handle="someone", display="Someone", created=None,
-         likes=0, liked=False, bookmarked=False):
+         likes=0, liked=False, bookmarked=False, account="john"):
     return {
         "id": tweet_id,
-        "accountHandle": "@john",
+        "accountHandle": f"@{account}",
         "text": text,
         "createdAt": created,
         "likeCount": likes,
@@ -89,6 +89,37 @@ def test_falls_back_to_recent_bookmark_when_no_authored_match():
     assert result["source"] == "bookmarked"
     assert result["text"] == "Newest save"
     assert result["display_name"] == "DHH"
+
+
+def test_fallback_excludes_own_tweets_in_likes():
+    # John liked his own tweet (author handle == account handle); it must not be
+    # surfaced as "a tweet you liked".
+    responses = {
+        "authored": [],
+        "bookmarked": [],
+        "liked": [
+            _row("My own old tweet", tweet_id="60", handle="john", account="john",
+                 created="2026-06-21T00:00:00.000Z", liked=True),
+            _row("Someone else's gem", tweet_id="61", handle="patio11", account="john",
+                 created="2026-06-18T00:00:00.000Z", liked=True),
+        ],
+    }
+    with patch("modules.tweet.subprocess.run", side_effect=_search_dispatch(responses)):
+        result = tweet_block()
+    assert result["source"] == "liked"
+    assert result["text"] == "Someone else's gem"
+    assert result["handle"] == "patio11"
+
+
+def test_fallback_returns_none_when_only_own_tweets_saved():
+    responses = {
+        "authored": [],
+        "bookmarked": [_row("My own bookmarked tweet", tweet_id="70", handle="john",
+                           account="john", created="2026-06-20T00:00:00.000Z", bookmarked=True)],
+        "liked": [],
+    }
+    with patch("modules.tweet.subprocess.run", side_effect=_search_dispatch(responses)):
+        assert tweet_block() is None
 
 
 def test_falls_back_to_likes_when_no_bookmarks():
