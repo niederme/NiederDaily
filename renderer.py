@@ -64,7 +64,7 @@ a{color:#121212;}
 .photo-frame img{width:100%;display:block;}
 .photo-description{font-size:16px;font-weight:400;letter-spacing:-0.01em;line-height:1.45;color:#474a51;margin-top:4px;}
 .photo-meta{margin-top:6px;font-size:12px;line-height:1.45;color:#6d7178;}
-.tweet-module{max-width:520px;}
+.tweet-module{max-width:520px;margin:0 auto;}
 .tweet-link{display:block;color:inherit;text-decoration:none;}
 .tweet-card{padding:18px 20px 16px;border:1px solid rgba(214,208,198,0.9);border-radius:14px;background:#ffffff;}
 .tweet-author{margin-bottom:10px;}
