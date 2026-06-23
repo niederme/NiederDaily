@@ -19,8 +19,10 @@ _BIRDCLAW_CANDIDATES = (
     "/usr/local/bin/birdclaw",     # Intel Homebrew
     str(Path.home() / ".local/bin/birdclaw"),
 )
-# How many authored tweets to scan when hunting for on-this-day matches.
-AUTHORED_SCAN_LIMIT = 400
+# How many authored tweets to scan when hunting for on-this-day matches. Must
+# cover the full archive — birdclaw returns most-recent-first, so a small limit
+# silently hides older years and lets old tweets leak into the like fallback.
+AUTHORED_SCAN_LIMIT = 20000
 # How many recent saves to consider for the fallback pick.
 FALLBACK_LIMIT = 25
 TIMEOUT_SECONDS = 30
@@ -127,25 +129,34 @@ def _on_this_day_authored(as_of: date | None = None) -> dict | None:
     return matches[0][1]
 
 
-def _is_self_authored(row: dict) -> bool:
-    """True when the tweet's author is the account owner — i.e. John liked or
-    bookmarked his own tweet. Those belong in the on-this-day 'You Tweeted'
-    path, not the 'a tweet you liked/bookmarked' fallback."""
-    author = ((row.get("author") or {}).get("handle") or "").lstrip("@").lower()
+def _has_external_author(row: dict) -> bool:
+    """True only when the tweet has a real, attributed author who isn't the
+    account owner.
+
+    A raw birdclaw archive import (no live hydration) yields unreliable
+    like/bookmark data: John's own tweets come back flagged ``liked: True``,
+    and genuinely-external tweets arrive with ``author: unknown`` because their
+    profiles were never hydrated. The fallback must only surface tweets that
+    are clearly someone else's, so it stays quiet until clean data exists
+    rather than rendering "A Tweet You Liked" by John or by nobody.
+    """
+    author = ((row.get("author") or {}).get("handle") or "").strip().lstrip("@").lower()
+    if not author or author == "unknown":
+        return False
     account = (row.get("accountHandle") or "").lstrip("@").lower()
-    return bool(author and account and author == account)
+    return author != account
 
 
 def _recent_save() -> dict | None:
-    """Fallback: the most recent thing John bookmarked, else liked — excluding
-    his own tweets, which only make sense in the on-this-day section."""
+    """Fallback: the most recent thing John bookmarked, else liked — restricted
+    to tweets with a real external author (see _has_external_author)."""
     for flag, source in (("--bookmarked", "bookmarked"), ("--liked", "liked")):
         rows = _run_search([flag, "--limit", str(FALLBACK_LIMIT)])
         if not rows:
             continue
         candidates: list[tuple[float, dict]] = []
         for row in rows:
-            if _is_self_authored(row):
+            if not _has_external_author(row):
                 continue
             normalized = _normalize(row, source)
             if not normalized:
