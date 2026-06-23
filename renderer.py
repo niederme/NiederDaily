@@ -477,8 +477,9 @@ def render_email(
     photo: tuple | None,
     nyt: list | None,
     tweet: dict | None = None,
+    as_of: date | None = None,
 ) -> MIMEMultipart:
-    today = date.today()
+    today = as_of or date.today()
     date_str = today.strftime("%A, %B %-d, %Y")
     subject = f"NiederDaily · {date_str}"
 

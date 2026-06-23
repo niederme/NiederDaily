@@ -42,13 +42,15 @@ func main() throws {
     process.executableURL = URL(fileURLWithPath: pythonPath)
 
     var environment = ProcessInfo.processInfo.environment
-    environment["PATH"] = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+    environment["PATH"] = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
     environment["TMPDIR"] = tmpDir
     environment["NIEDERDAILY_LAUNCHED_FROM_APP"] = "1"
-    let launchArgs = CommandLine.arguments.dropFirst()
+    let launchArgs = Array(CommandLine.arguments.dropFirst())
     let shouldRun = launchArgs.contains("--run") || environment["NIEDERDAILY_MODE"] == "run"
     if shouldRun {
-        process.arguments = [scriptPath]
+        // Forward any extra flags (e.g. --date YYYY-MM-DD) to the script.
+        let passthrough = launchArgs.filter { $0 != "--run" }
+        process.arguments = [scriptPath] + passthrough
     } else {
         process.arguments = [scriptPath, "--preflight"]
     }

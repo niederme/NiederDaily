@@ -2,17 +2,40 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import shutil
 import subprocess
 from datetime import date, datetime
+from pathlib import Path
 
 log = logging.getLogger(__name__)
 
 BIRDCLAW_BIN = "birdclaw"
+# Known install locations, checked when birdclaw isn't on PATH. The wrapper app
+# runs with a restricted PATH that omits Homebrew dirs, so resolving the binary
+# explicitly is what lets the tweet module work in scheduled/app runs.
+_BIRDCLAW_CANDIDATES = (
+    "/opt/homebrew/bin/birdclaw",  # Apple Silicon Homebrew
+    "/usr/local/bin/birdclaw",     # Intel Homebrew
+    str(Path.home() / ".local/bin/birdclaw"),
+)
 # How many authored tweets to scan when hunting for on-this-day matches.
 AUTHORED_SCAN_LIMIT = 400
 # How many recent saves to consider for the fallback pick.
 FALLBACK_LIMIT = 25
 TIMEOUT_SECONDS = 30
+
+
+def _resolve_bin() -> str:
+    """Locate the birdclaw binary, falling back to known install paths so it
+    works under the wrapper app's restricted PATH."""
+    found = shutil.which(BIRDCLAW_BIN)
+    if found:
+        return found
+    for candidate in _BIRDCLAW_CANDIDATES:
+        if os.path.exists(candidate):
+            return candidate
+    return BIRDCLAW_BIN  # let subprocess raise FileNotFoundError if truly absent
 
 
 def _run_search(args: list[str]) -> list | None:
@@ -24,7 +47,7 @@ def _run_search(args: list[str]) -> list | None:
     """
     try:
         result = subprocess.run(
-            [BIRDCLAW_BIN, "--json", "search", "tweets", *args],
+            [_resolve_bin(), "--json", "search", "tweets", *args],
             capture_output=True, text=True, timeout=TIMEOUT_SECONDS,
         )
     except FileNotFoundError:
@@ -82,12 +105,12 @@ def _normalize(row: dict, source: str) -> dict | None:
     }
 
 
-def _on_this_day_authored() -> dict | None:
+def _on_this_day_authored(as_of: date | None = None) -> dict | None:
     """Prefer one of John's own tweets posted on this calendar day in a past year."""
     rows = _run_search(["--resource", "authored", "--limit", str(AUTHORED_SCAN_LIMIT)])
     if not rows:
         return None
-    today = date.today()
+    today = as_of or date.today()
     matches: list[tuple[datetime, dict]] = []
     for row in rows:
         created = _parse_created(row.get("createdAt"))
@@ -124,12 +147,15 @@ def _recent_save() -> dict | None:
     return None
 
 
-def tweet_block() -> dict | None:
+def tweet_block(as_of: date | None = None) -> dict | None:
     """Pick the tweet of the day from the local birdclaw store.
 
     Reads whatever is already synced into ~/.birdclaw — keeping live syncing a
     separate concern, the same way the photo module reads the local Photos
     library. Selection mirrors the on-this-day photo: prefer one of John's own
     tweets from this date in a past year, otherwise surface a recent save.
+
+    `as_of` overrides "today" for the on-this-day match (used by the --date
+    CLI flag to preview/send a newsletter as if it were another day).
     """
-    return _on_this_day_authored() or _recent_save()
+    return _on_this_day_authored(as_of) or _recent_save()

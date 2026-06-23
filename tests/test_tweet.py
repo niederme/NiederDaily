@@ -104,6 +104,22 @@ def test_falls_back_to_likes_when_no_bookmarks():
     assert result["text"] == "A liked tweet"
 
 
+def test_as_of_overrides_on_this_day_match():
+    # An authored tweet whose month/day matches a *chosen* date, not today.
+    responses = {
+        "authored": [
+            _row("Authored on April 1", tweet_id="50", handle="john",
+                 created="2019-04-01T09:00:00.000Z"),
+        ],
+        "bookmarked": [_row("a recent save", tweet_id="51", bookmarked=True,
+                            created="2026-06-01T00:00:00.000Z")],
+    }
+    with patch("modules.tweet.subprocess.run", side_effect=_search_dispatch(responses)):
+        result = tweet_block(as_of=date(2026, 4, 1))
+    assert result["source"] == "authored"
+    assert result["text"] == "Authored on April 1"
+
+
 def test_returns_none_when_birdclaw_missing():
     with patch("modules.tweet.subprocess.run", side_effect=FileNotFoundError()):
         assert tweet_block() is None
