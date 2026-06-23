@@ -27,7 +27,7 @@ from renderer import render_email
 from sender import send_email
 
 
-def run(config_path: str = None):
+def run(config_path: str = None, as_of=None):
     try:
         conf = cfg.load_config(config_path)
     except cfg.ConfigError as e:
@@ -51,7 +51,7 @@ def run(config_path: str = None):
     reminders = _safe(reminders_block, conf.get("reminders_lists", []))
     messages  = _safe(messages_block, conf["anthropic_api_key"])
     photo     = _safe(photo_block, conf["anthropic_api_key"])
-    tweet     = _safe(tweet_block)
+    tweet     = _safe(tweet_block, as_of=as_of)
     nyt       = _safe(nyt_block, conf.get("nyt_api_key"))
 
     # Step 7: welcome uses all available context to pick the best hook
@@ -69,6 +69,7 @@ def run(config_path: str = None):
         photo=photo,
         nyt=nyt,
         tweet=tweet,
+        as_of=as_of,
     )
 
     token_path = str(Path.home() / ".niederdaily" / "token.json")
@@ -267,9 +268,20 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--preflight", action="store_true")
     parser.add_argument("--config", default=None)
+    parser.add_argument("--date", default=None,
+                        help="Override 'today' (YYYY-MM-DD) — send the newsletter as if it were this date. "
+                             "Affects the on-this-day tweet pick and the email's date line.")
     args = parser.parse_args()
+
+    as_of = None
+    if args.date:
+        from datetime import date as _date
+        try:
+            as_of = _date.fromisoformat(args.date)
+        except ValueError:
+            parser.error(f"--date must be YYYY-MM-DD, got: {args.date}")
 
     if args.preflight:
         preflight()
     else:
-        run(config_path=args.config)
+        run(config_path=args.config, as_of=as_of)
