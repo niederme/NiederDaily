@@ -92,7 +92,7 @@ def test_falls_back_to_recent_bookmark_when_no_authored_match():
 
 
 def test_fallback_excludes_own_tweets_in_likes():
-    # John liked his own tweet (author handle == account handle); it must not be
+    # Archive import mis-flags John's own tweets as liked:true; they must not be
     # surfaced as "a tweet you liked".
     responses = {
         "authored": [],
@@ -109,6 +109,21 @@ def test_fallback_excludes_own_tweets_in_likes():
     assert result["source"] == "liked"
     assert result["text"] == "Someone else's gem"
     assert result["handle"] == "patio11"
+
+
+def test_fallback_excludes_unhydrated_unknown_authors():
+    # Un-hydrated external likes come back with author handle "unknown" — skip
+    # them rather than render a card attributed to nobody.
+    responses = {
+        "authored": [],
+        "bookmarked": [],
+        "liked": [
+            _row("Mystery liked tweet", tweet_id="62", handle="unknown", account="john",
+                 created="2026-06-22T00:00:00.000Z", liked=True),
+        ],
+    }
+    with patch("modules.tweet.subprocess.run", side_effect=_search_dispatch(responses)):
+        assert tweet_block() is None
 
 
 def test_fallback_returns_none_when_only_own_tweets_saved():
