@@ -179,6 +179,16 @@ bash ~/~Repos/NiederDaily/setup/build_niederdaily_app.sh \
 
 Use this when you've changed the source and want to rebuild the wrapper app and immediately trigger a real send through it — the same execution path `launchd` uses. This is the right test before trusting a scheduled run, because the wrapper app is what holds TCC permissions for Calendar, Reminders, Photos, and Messages. Running Python directly bypasses that app identity and may silently miss those modules.
 
+### Send for a specific day (`--date`)
+
+```bash
+/Users/niederme/Applications/NiederDaily.app/Contents/MacOS/NiederDaily --run --date 2008-05-21
+```
+
+`--date YYYY-MM-DD` builds and sends the newsletter as if it were that day. It drives every date-driven module: the **Tweet of the Day** and **On This Day** photo (on-this-day for the chosen date), **Calendar** (that day's events), **Reminders** (overdue/today/upcoming relative to the date), the **welcome** greeting, and the email's date line and subject.
+
+**Weather** and **New York Times** always reflect the live present — neither API exposes historical data for a past date. The wrapper app forwards the flag, so it works both through the executable above and via `open ... --args --run --date YYYY-MM-DD`. Omit `--date` for a normal "today" send.
+
 ### Logs
 
 ```bash
@@ -244,6 +254,8 @@ This branch has already landed:
 - better weather card hierarchy and summary sentence
 - calendar and reminder source labels with colors
 - On This Day photo module styling and metadata cleanup
+- Tweet of the Day module sourced from the local birdclaw store
+- `--date YYYY-MM-DD` override to send/preview the newsletter as another day
 
 ## Roadmap
 
