@@ -64,6 +64,14 @@ a{color:#121212;}
 .photo-frame img{width:100%;display:block;}
 .photo-description{font-size:16px;font-weight:400;letter-spacing:-0.01em;line-height:1.45;color:#474a51;margin-top:4px;}
 .photo-meta{margin-top:6px;font-size:12px;line-height:1.45;color:#6d7178;}
+.tweet-module{max-width:520px;}
+.tweet-link{display:block;color:inherit;text-decoration:none;}
+.tweet-card{padding:18px 20px 16px;border:1px solid rgba(214,208,198,0.9);border-radius:14px;background:#ffffff;}
+.tweet-author{margin-bottom:10px;}
+.tweet-name{font-size:15px;font-weight:700;letter-spacing:-0.01em;color:#121212;}
+.tweet-handle{font-size:13px;color:#6d7178;margin-left:7px;}
+.tweet-text{font-size:17px;line-height:1.46;letter-spacing:-0.01em;color:#121212;white-space:pre-wrap;}
+.tweet-meta{margin-top:12px;font-size:12px;line-height:1.45;color:#6d7178;}
 .footer{padding:28px 40px 36px;font-size:11px;color:#474a51;border-top:1px solid rgba(214,208,198,0.8);background:#ffffff;}
 .footer a{color:#121212;text-decoration:none;border-bottom:1px solid rgba(18,18,18,0.65);}
 @media only screen and (max-width: 640px){
@@ -97,6 +105,9 @@ a{color:#121212;}
   .nytdek{font-size:12px !important;line-height:1.45 !important;}
   .nytmeta{font-size:11px !important;margin-top:6px !important;}
   .photo-meta{font-size:11px !important;gap:8px !important;}
+  .tweet-card{padding:14px 14px 12px !important;border-radius:12px !important;}
+  .tweet-text{font-size:16px !important;line-height:1.45 !important;}
+  .tweet-meta{font-size:11px !important;margin-top:10px !important;}
 }
 """
 
@@ -404,6 +415,58 @@ def _photo_html(photo: tuple, *, show_rule: bool = True) -> str:
     return _section(None, body, show_rule=show_rule)
 
 
+def _tweet_html(tweet: dict, *, show_rule: bool = True) -> str:
+    source = tweet.get("source")
+    year = tweet.get("year") or ""
+    if source == "authored":
+        heading = f"You Tweeted · {year}" if year else "You Tweeted"
+    elif source == "bookmarked":
+        heading = "From Your Bookmarks"
+    else:
+        heading = "A Tweet You Liked"
+
+    raw_date = tweet.get("date")
+    try:
+        pretty_date = date.fromisoformat(raw_date).strftime("%B %-d, %Y")
+    except (TypeError, ValueError):
+        pretty_date = raw_date or ""
+
+    meta_bits = []
+    if pretty_date:
+        meta_bits.append(_esc(pretty_date))
+    likes = tweet.get("like_count") or 0
+    if likes:
+        meta_bits.append(f"{likes:,} likes")
+    meta_line = " · ".join(meta_bits)
+    meta_html = f'<div class="tweet-meta">{meta_line}</div>' if meta_line else ""
+
+    handle = tweet.get("handle") or ""
+    handle_html = f'<span class="tweet-handle">@{_esc(handle)}</span>' if handle else ""
+    author_html = (
+        f'<div class="tweet-author">'
+        f'<span class="tweet-name">{_esc(tweet.get("display_name") or "")}</span>'
+        f'{handle_html}</div>'
+    )
+    card_inner = (
+        f'{author_html}'
+        f'<div class="tweet-text">{_esc(tweet.get("text") or "")}</div>'
+        f'{meta_html}'
+    )
+    url = tweet.get("url")
+    if url:
+        card = f'<a class="tweet-link" href="{_esc(url)}"><div class="tweet-card">{card_inner}</div></a>'
+    else:
+        card = f'<div class="tweet-card">{card_inner}</div>'
+
+    body = (
+        '<div class="tweet-module">'
+        f'<div style="{SECTION_LABEL_STYLE}">{_esc(heading)}</div>'
+        f'{card}'
+        '</div>'
+    )
+    return _section(None, body, show_rule=show_rule)
+
+
 def render_email(
     recipient: str,
     welcome: str | None,
@@ -413,6 +476,7 @@ def render_email(
     messages: dict | None,
     photo: tuple | None,
     nyt: list | None,
+    tweet: dict | None = None,
 ) -> MIMEMultipart:
     today = date.today()
     date_str = today.strftime("%A, %B %-d, %Y")
@@ -436,6 +500,9 @@ def render_email(
         next_section_rule = True
     if photo:
         sections.append(_photo_html(photo, show_rule=next_section_rule))
+        next_section_rule = True
+    if tweet:
+        sections.append(_tweet_html(tweet, show_rule=next_section_rule))
         next_section_rule = True
     if nyt:
         sections.append(_nyt_html(nyt, show_rule=next_section_rule))

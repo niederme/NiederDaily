@@ -33,6 +33,7 @@ Each run builds an email with some or all of these modules:
 - `Reminders`
 - `Messages`
 - `On This Day`
+- `Tweet of the Day`
 - `New York Times Most Popular`
 
 If a module fails, the send can still continue. The app logs the failure and omits that section rather than killing the whole newsletter.
@@ -45,6 +46,7 @@ If a module fails, the send can still continue. The app logs the failure and omi
 - Anthropic API key for the welcome line
 - New York Times API key
 - local access to Calendar, Reminders, Photos, Contacts, Messages, and Shortcuts as needed
+- optional: [`birdclaw`](https://birdclaw.sh) CLI (`brew install steipete/tap/birdclaw`) with a synced archive/likes/bookmarks for the Tweet of the Day module
 
 Python dependencies live in [`requirements.txt`](/Users/niederme/~Repos/NiederDaily/requirements.txt):
 
@@ -224,6 +226,7 @@ launchctl print gui/$(id -u)/me.nieder.daily
 - [`modules/reminders.py`](/Users/niederme/~Repos/NiederDaily/modules/reminders.py): EventKit reminders fetch
 - [`modules/messages.py`](/Users/niederme/~Repos/NiederDaily/modules/messages.py): Messages snapshot
 - [`modules/photo.py`](/Users/niederme/~Repos/NiederDaily/modules/photo.py): "On This Day" photo selection
+- [`modules/tweet.py`](/Users/niederme/~Repos/NiederDaily/modules/tweet.py): "Tweet of the Day" from the local birdclaw store
 - [`modules/nyt.py`](/Users/niederme/~Repos/NiederDaily/modules/nyt.py): NYT Most Popular fetch
 - [`modules/welcome.py`](/Users/niederme/~Repos/NiederDaily/modules/welcome.py): Claude prompt + welcome line
 - [`tests/`](/Users/niederme/~Repos/NiederDaily/tests): focused module and renderer tests

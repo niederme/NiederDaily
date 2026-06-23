@@ -21,6 +21,7 @@ from modules.welcome import welcome_block
 from modules.reminders import reminders_block, reminders_access_granted
 from modules.messages import messages_block, contacts_access_granted
 from modules.photo import photo_access_granted, photo_block
+from modules.tweet import tweet_block
 from modules.nyt import nyt_block
 from renderer import render_email
 from sender import send_email
@@ -50,12 +51,13 @@ def run(config_path: str = None):
     reminders = _safe(reminders_block, conf.get("reminders_lists", []))
     messages  = _safe(messages_block, conf["anthropic_api_key"])
     photo     = _safe(photo_block, conf["anthropic_api_key"])
+    tweet     = _safe(tweet_block)
     nyt       = _safe(nyt_block, conf.get("nyt_api_key"))
 
     # Step 7: welcome uses all available context to pick the best hook
     welcome = _safe(welcome_block, conf["anthropic_api_key"],
                     weather_data=weather, calendar_events=calendar,
-                    nyt_stories=nyt, photo=photo, messages=messages)
+                    nyt_stories=nyt, photo=photo, messages=messages, tweet=tweet)
 
     msg = render_email(
         recipient=conf["recipient_email"],
@@ -66,6 +68,7 @@ def run(config_path: str = None):
         messages=messages,
         photo=photo,
         nyt=nyt,
+        tweet=tweet,
     )
 
     token_path = str(Path.home() / ".niederdaily" / "token.json")
@@ -141,6 +144,16 @@ def preflight():
         photos_ready,
         " (Photo Library accessible)",
         "unavailable — grant Photos access in System Settings → Privacy & Security → Photos. The newsletter will skip this section until access is granted.",
+        blocking=False,
+    )
+
+    # Twitter / birdclaw
+    tweet = tweet_block()
+    report(
+        "Twitter",
+        tweet is not None,
+        f" (tweet of the day ready — {tweet['source']})" if tweet else "",
+        "no tweet available — install birdclaw (brew install steipete/tap/birdclaw) and sync your archive/likes/bookmarks into ~/.birdclaw. The newsletter will skip this section until data is present.",
         blocking=False,
     )
 

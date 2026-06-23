@@ -8,7 +8,7 @@ SYSTEM_PROMPT = (
     "The newsletter belongs to John — when 'John' appears in a calendar event, that is the recipient himself, not a third party. "
     "One sentence only. Dry wit welcome. No exclamation marks. Do not start with 'Good morning.' "
     "Pick exactly ONE hook from the context and write only about that — prefer a news headline, "
-    "calendar event, or memory photo over the message situation. Only use messages as a hook "
+    "calendar event, memory photo, or a notable tweet over the message situation. Only use messages as a hook "
     "if nothing else is interesting. When you do use messages, keep it warm and light, not snarky. "
     "Calendar order is chronological, not editorial: do not favor an event because it is first or early. "
     "Treat events labeled ROUTINE as low-interest background and avoid using them when any worthwhile "
@@ -50,6 +50,7 @@ def welcome_block(
     nyt_stories: list | None = None,
     photo: tuple | None = None,
     messages: dict | None = None,
+    tweet: dict | None = None,
 ) -> str | None:
     if not api_key:
         return None
@@ -118,6 +119,19 @@ def welcome_block(
                 parts.append(f"MEMORY PHOTO ({year}{loc_part}{fav}): {desc}")
             elif year:
                 parts.append(f"MEMORY PHOTO from {year}{loc_part}{fav}.")
+
+        if tweet and (tweet.get("text") or "").strip():
+            text = tweet["text"].strip()
+            source = tweet.get("source")
+            handle = tweet.get("handle") or ""
+            if source == "authored":
+                year = tweet.get("year", "")
+                label = f"YOUR TWEET on this day{f' in {year}' if year else ''}"
+            elif source == "bookmarked":
+                label = f"TWEET YOU BOOKMARKED{f' (by @{handle})' if handle else ''}"
+            else:
+                label = f"TWEET YOU LIKED{f' (by @{handle})' if handle else ''}"
+            parts.append(f'{label}: "{text}"')
 
         if messages and messages.get("thread_count", 0) > 0:
             parts.append(f"MESSAGES: {messages['summary']}")
