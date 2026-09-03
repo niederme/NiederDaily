@@ -12,19 +12,25 @@ NYT_URL = "https://api.nytimes.com/svc/topstories/v2/home.json"
 RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
 MAX_ATTEMPTS = 3
 RETRY_DELAY_SECONDS = 5.0
+# Top Stories multimedia carries the same image at several crops. Prefer the 3:2
+# crops the email's 175x117 slot is cut for, then the wider stand-ins, and leave
+# the 75x75 "Standard Thumbnail" as a last resort — it upscales badly.
 PREFERRED_FORMATS = [
     "mediumThreeByTwo210",
     "threeByTwoSmallAt2X",
     "mediumThreeByTwo440",
     "Normal",
     "superJumbo",
-    "Super Jumbo",
+    "thumbLarge",
+    "Standard Thumbnail",
 ]
 
 
 def _pick_thumbnail(multimedia) -> str | None:
-    """Top Stories multimedia comes in two shapes: a list of format variants, and
-    a single object carrying `default`/`thumbnail` children. Handle both."""
+    """The documented shape is a list of format variants. The object shape with
+    `default`/`thumbnail` children is undocumented here, but it is what the 2025
+    multimedia rework did to the sibling NYT feeds, so absorb it rather than
+    dropping every image the day it reaches this one."""
     if isinstance(multimedia, dict):
         for key in ("default", "thumbnail"):
             url = (multimedia.get(key) or {}).get("url")
@@ -41,8 +47,9 @@ def _pick_thumbnail(multimedia) -> str | None:
 
 
 def _published_date(raw: str | None) -> str:
-    """Top Stories publishes full ISO timestamps ("2026-09-03T09:00:00-04:00");
-    the renderer wants a plain date it can age against."""
+    """Top Stories publishes full ISO timestamps; the renderer wants a plain date
+    it can age against. Slice rather than parse: the documented example offset is
+    "-5:00", a single-digit hour that datetime.fromisoformat rejects outright."""
     if not raw:
         return ""
     candidate = raw[:10]
@@ -84,7 +91,7 @@ def nyt_block(api_key: str | None) -> list | None:
             "byline": s.get("byline", ""),
             "published_date": _published_date(s.get("published_date")),
             "url": s.get("url", ""),
-            "thumbnail": _pick_thumbnail(s.get("multimedia")),
+            "thumbnail": _pick_thumbnail(s.get("multimedia")) or s.get("thumbnail_standard"),
         }
         for s in stories
     ]

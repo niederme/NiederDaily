@@ -38,6 +38,16 @@ NYT_RESPONSE = {
             "url": "https://nytimes.com/story3",
             "multimedia": None,
         },
+        {
+            "section": "science",
+            "title": "Big Story Four",
+            "abstract": "Only a standard thumbnail.",
+            "byline": "By Reporter Four",
+            "published_date": "2026-06-20T11:00:00-5:00",
+            "url": "https://nytimes.com/story4",
+            "thumbnail_standard": "https://static.nyt.com/story4-standard.jpg",
+            "multimedia": [],
+        },
     ] + [
         {
             "title": f"Story {i}",
@@ -93,6 +103,26 @@ def test_nyt_block_skips_entries_without_a_title_or_url(requests_mock):
     ]})
     result = nyt_block("test-key")
     assert [s["title"] for s in result] == ["Real Story"]
+
+def test_nyt_block_prefers_the_three_by_two_crop_over_the_standard_thumbnail():
+    """The 75x75 "Standard Thumbnail" upscales badly in the email's 3:2 slot."""
+    from modules.nyt import _pick_thumbnail
+    multimedia = [
+        {"url": "https://static.nyt.com/tiny.jpg", "format": "Standard Thumbnail", "height": 75, "width": 75},
+        {"url": "https://static.nyt.com/wide.jpg", "format": "mediumThreeByTwo210", "height": 140, "width": 210},
+    ]
+    assert _pick_thumbnail(multimedia) == "https://static.nyt.com/wide.jpg"
+
+def test_nyt_block_falls_back_to_thumbnail_standard(requests_mock):
+    requests_mock.get(NYT_URL, json=NYT_RESPONSE)
+    result = nyt_block("test-key")
+    assert result[3]["thumbnail"] == "https://static.nyt.com/story4-standard.jpg"
+
+def test_nyt_block_survives_the_single_digit_offset_in_the_docs(requests_mock):
+    """The documented sample offset is "-5:00", which fromisoformat rejects."""
+    requests_mock.get(NYT_URL, json=NYT_RESPONSE)
+    result = nyt_block("test-key")
+    assert result[3]["published_date"] == "2026-06-20"
 
 def test_nyt_block_retries_on_transient_error(requests_mock):
     """A connection blip on the first attempt must not silently drop the section."""
