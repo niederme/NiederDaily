@@ -11,7 +11,7 @@ It currently combines:
 - local Messages context from `chat.db`
 - home weather, plus travel weather when a trip calendar location points elsewhere
 - a short Claude-written welcome line
-- New York Times Most Popular stories
+- New York Times Top Stories
 
 The current branch also includes a substantial visual refresh so the email feels closer to the `nieder.me/2026` editorial style on desktop and mobile.
 
@@ -34,7 +34,7 @@ Each run builds an email with some or all of these modules:
 - `Messages`
 - `On This Day`
 - `Tweet of the Day`
-- `New York Times Most Popular`
+- `New York Times Top Stories`
 
 If a module fails, the send can still continue. The app logs the failure and omits that section rather than killing the whole newsletter.
 
@@ -237,7 +237,7 @@ launchctl print gui/$(id -u)/me.nieder.daily
 - [`modules/messages.py`](/Users/niederme/~Repos/NiederDaily/modules/messages.py): Messages snapshot
 - [`modules/photo.py`](/Users/niederme/~Repos/NiederDaily/modules/photo.py): "On This Day" photo selection
 - [`modules/tweet.py`](/Users/niederme/~Repos/NiederDaily/modules/tweet.py): "Tweet of the Day" from the local birdclaw store
-- [`modules/nyt.py`](/Users/niederme/~Repos/NiederDaily/modules/nyt.py): NYT Most Popular fetch
+- [`modules/nyt.py`](/Users/niederme/~Repos/NiederDaily/modules/nyt.py): NYT Top Stories fetch
 - [`modules/welcome.py`](/Users/niederme/~Repos/NiederDaily/modules/welcome.py): Claude prompt + welcome line
 - [`tests/`](/Users/niederme/~Repos/NiederDaily/tests): focused module and renderer tests
 
@@ -249,7 +249,7 @@ This branch has already landed:
 - preflight cleanup and degraded-vs-blocking behavior
 - redesigned light-mode email styling
 - improved mobile layout
-- NYT Most Popular instead of Top Stories
+- NYT Top Stories feed for the front-page news of the day
 - bylines and larger 3:2 NYT images
 - better weather card hierarchy and summary sentence
 - calendar and reminder source labels with colors
