@@ -380,7 +380,7 @@ def _nyt_html(stories: list, *, show_rule: bool = True) -> str:
             f'<div style="flex:1;"><div class="nythed">{_esc(s["title"])}</div>'
             f'<div class="nytdek">{_esc(s["abstract"])}</div>{meta}</div>{img}</a></div>'
         )
-    return _section("In Case You Missed It", "".join(rows), show_rule=show_rule)
+    return _section("Top Stories", "".join(rows), show_rule=show_rule)
 
 
 def _photo_html(photo: tuple, *, show_rule: bool = True) -> str:

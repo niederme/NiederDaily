@@ -22,7 +22,7 @@ from modules.reminders import reminders_block, reminders_access_granted
 from modules.messages import messages_block, contacts_access_granted
 from modules.photo import photo_access_granted, photo_block
 from modules.tweet import tweet_block
-from modules.nyt import nyt_block
+from modules.nyt import NYT_URL, nyt_block
 from renderer import render_email
 from sender import send_email
 
@@ -238,8 +238,7 @@ def preflight():
     # NYT
     if conf.get("nyt_api_key") and conf["nyt_api_key"] != "FILL_IN":
         try:
-            r = requests.get("https://api.nytimes.com/svc/topstories/v2/home.json",
-                params={"api-key": conf["nyt_api_key"]}, timeout=10)
+            r = requests.get(NYT_URL, params={"api-key": conf["nyt_api_key"]}, timeout=10)
             r.raise_for_status()
             print("✓ NYT Top Stories")
         except Exception as e:
