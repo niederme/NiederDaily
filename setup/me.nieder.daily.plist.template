@@ -13,9 +13,9 @@
     <key>StartCalendarInterval</key>
     <dict>
         <key>Hour</key>
-        <integer>6</integer>
+        <integer>5</integer>
         <key>Minute</key>
-        <integer>0</integer>
+        <integer>55</integer>
     </dict>
     <key>StandardOutPath</key>
     <string>__LOG_DIR__/niederdaily.log</string>
