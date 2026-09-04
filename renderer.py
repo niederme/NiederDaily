@@ -521,7 +521,7 @@ def render_email(
     {welcome_html}
   </div>
   {"".join(sections)}
-  <div class="footer">NiederDaily · <a href="mailto:{recipient}">{recipient}</a> · Every morning at 6am</div>
+  <div class="footer">NiederDaily · <a href="mailto:{recipient}">{recipient}</a> · Every morning at 5:55am</div>
 </div>
 </div>
 </body></html>"""
