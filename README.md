@@ -85,6 +85,7 @@ Create `~/.niederdaily/config.json`:
   "default_location": { "name": "Warwick, NY", "lat": 41.2512, "lon": -74.3607 },
   "nyt_api_key": "YOUR_NYT_KEY",
   "anthropic_api_key": "YOUR_ANTHROPIC_KEY",
+  "recipient_birthday": "MM-DD",
   "reminders_lists": [],
   "calendars": [],
   "weather_calendars": ["Little York", "niederCal", "TripIt"]
@@ -92,6 +93,10 @@ Create `~/.niederdaily/config.json`:
 ```
 
 Required keys are defined in [`config.py`](/Users/niederme/~Repos/NiederDaily/config.py). Calendar and weather calendar lists are optional filters.
+
+`recipient_birthday` is optional and accepts `MM-DD` or `YYYY-MM-DD` — only the month and day are
+compared. Set it and the welcome greeting knows the day is genuinely yours; leave it out and every
+birthday on the calendar is treated as someone else's.
 
 ### 3. Add Gmail OAuth credentials
 
