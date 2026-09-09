@@ -171,3 +171,35 @@ def test_welcome_block_includes_message_summary_in_prompt(mocker):
     prompt_text = call_args.kwargs["messages"][0]["content"]
     assert "MESSAGES" in prompt_text
     assert "clearing its throat for a reply" in prompt_text
+
+
+def test_welcome_block_resolves_job_shorthand_to_jobeth_leon(mocker):
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = MagicMock(
+        content=[MagicMock(text="Jobeth gets the candles today, which is a fine excuse for cake by proxy.")]
+    )
+    mocker.patch("modules.welcome.anthropic.Anthropic", return_value=mock_client)
+    events = [{"time": None, "title": "JoB's birthday!", "all_day": True}]
+
+    welcome_block("sk-ant-test", weather_data=WEATHER, calendar_events=events)
+
+    call_args = mock_client.messages.create.call_args
+    prompt_text = call_args.kwargs["messages"][0]["content"]
+    system_text = call_args.kwargs["system"]
+    assert "JoB means Jobeth Leon" in prompt_text
+    assert "JN means John" not in prompt_text
+    assert "shorthand in an event title never mean John" in system_text
+
+
+def test_welcome_block_forbids_reasoning_out_loud(mocker):
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = MagicMock(
+        content=[MagicMock(text="The keynote arrives, and with it the annual urge to buy nothing.")]
+    )
+    mocker.patch("modules.welcome.anthropic.Anthropic", return_value=mock_client)
+
+    welcome_block("sk-ant-test", weather_data=WEATHER, calendar_events=EVENTS)
+
+    system_text = mock_client.messages.create.call_args.kwargs["system"]
+    assert "Return only the greeting sentence" in system_text
+    assert "Never explain your choice" in system_text

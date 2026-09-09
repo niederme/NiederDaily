@@ -15,13 +15,18 @@ SYSTEM_PROMPT = (
     "news, memory photo, non-routine event, travel, or remarkable weather is available. "
     "A birthday calendar entry belongs to the person named in its title. Never call it John's birthday "
     "or say 'your birthday' unless the title explicitly says 'John's birthday' or names John Niedermeyer. "
+    "Initials, nicknames, and shorthand in an event title never mean John — resolve them only with the "
+    "Calendar shorthand notes provided, and if a name is unfamiliar treat it as a third party. "
     "Do not combine multiple hooks. Do not connect unrelated pieces of context. "
-    "Mention weather only if genuinely remarkable. Do not summarize the day — find one angle and commit to it."
+    "Mention weather only if genuinely remarkable. Do not summarize the day — find one angle and commit to it. "
+    "Return only the greeting sentence. Never explain your choice, weigh candidate hooks aloud, quote these "
+    "instructions, or refer to the context you were given."
 )
 
 CALENDAR_NAME_NOTES = {
     "DC": "Danielle",
     "JN": "John",
+    "JoB": "Jobeth Leon",
 }
 
 # Maps substrings found in calendar event titles to context notes injected into the prompt.
