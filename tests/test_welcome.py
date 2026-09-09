@@ -1,7 +1,8 @@
 import pytest
+from datetime import date
 from unittest.mock import MagicMock
 
-from modules.welcome import welcome_block
+from modules.welcome import _is_recipient_birthday, welcome_block
 
 WEATHER = {"locations": [{"location": "Warwick, NY", "temp": 54, "condition": "Overcast"}], "travel_city": None}
 EVENTS = [{"time": "9:00am", "title": "Weekly sync", "all_day": False}]
@@ -171,3 +172,73 @@ def test_welcome_block_includes_message_summary_in_prompt(mocker):
     prompt_text = call_args.kwargs["messages"][0]["content"]
     assert "MESSAGES" in prompt_text
     assert "clearing its throat for a reply" in prompt_text
+
+
+def test_welcome_block_resolves_job_shorthand_to_jobeth_leon(mocker):
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = MagicMock(
+        content=[MagicMock(text="Jobeth gets the candles today, which is a fine excuse for cake by proxy.")]
+    )
+    mocker.patch("modules.welcome.anthropic.Anthropic", return_value=mock_client)
+    events = [{"time": None, "title": "JoB's birthday!", "all_day": True}]
+
+    welcome_block("sk-ant-test", weather_data=WEATHER, calendar_events=events)
+
+    call_args = mock_client.messages.create.call_args
+    prompt_text = call_args.kwargs["messages"][0]["content"]
+    system_text = call_args.kwargs["system"]
+    assert "JoB means Jobeth Leon" in prompt_text
+    assert "JN means John" not in prompt_text
+    assert "shorthand in an event title never mean John" in system_text
+
+
+def test_welcome_block_forbids_reasoning_out_loud(mocker):
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = MagicMock(
+        content=[MagicMock(text="The keynote arrives, and with it the annual urge to buy nothing.")]
+    )
+    mocker.patch("modules.welcome.anthropic.Anthropic", return_value=mock_client)
+
+    welcome_block("sk-ant-test", weather_data=WEATHER, calendar_events=EVENTS)
+
+    system_text = mock_client.messages.create.call_args.kwargs["system"]
+    assert "Return only the greeting sentence" in system_text
+    assert "Never explain your choice" in system_text
+
+
+def _birthday_prompt(mocker, birthday, as_of):
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = MagicMock(
+        content=[MagicMock(text="Another lap completed, and the calendar has the nerve to look unimpressed.")]
+    )
+    mocker.patch("modules.welcome.anthropic.Anthropic", return_value=mock_client)
+    welcome_block(
+        "sk-ant-test", weather_data=WEATHER, calendar_events=EVENTS,
+        recipient_birthday=birthday, as_of=as_of,
+    )
+    return mock_client.messages.create.call_args
+
+
+def test_welcome_block_flags_recipients_own_birthday(mocker):
+    call_args = _birthday_prompt(mocker, "03-14", date(2026, 3, 14))
+    prompt_text = call_args.kwargs["messages"][0]["content"]
+    system_text = call_args.kwargs["system"]
+    assert "TODAY IS JOHN'S OWN BIRTHDAY" in prompt_text
+    assert "the recipient's own, not a third party's" in prompt_text
+    assert "or the context includes the line TODAY IS JOHN'S OWN BIRTHDAY" in system_text
+
+
+def test_welcome_block_ignores_birth_year_when_matching(mocker):
+    prompt_text = _birthday_prompt(mocker, "1977-03-14", date(2026, 3, 14)).kwargs["messages"][0]["content"]
+    assert "TODAY IS JOHN'S OWN BIRTHDAY" in prompt_text
+    assert "1977" not in prompt_text
+
+
+def test_welcome_block_omits_birthday_flag_on_other_days(mocker):
+    prompt_text = _birthday_prompt(mocker, "03-14", date(2026, 3, 15)).kwargs["messages"][0]["content"]
+    assert "OWN BIRTHDAY" not in prompt_text
+
+
+@pytest.mark.parametrize("birthday", [None, "", "not-a-date", "1977", "xx-yy"])
+def test_is_recipient_birthday_rejects_unusable_values(birthday):
+    assert _is_recipient_birthday(birthday, date(2026, 3, 14)) is False

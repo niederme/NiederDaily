@@ -58,6 +58,7 @@ def run(config_path: str = None, as_of=None):
     welcome = _safe(welcome_block, conf["anthropic_api_key"],
                     weather_data=weather, calendar_events=calendar,
                     nyt_stories=nyt, photo=photo, messages=messages, tweet=tweet,
+                    recipient_birthday=conf.get("recipient_birthday"),
                     as_of=as_of)
 
     msg = render_email(

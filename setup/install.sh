@@ -26,6 +26,7 @@ cat > "$CONFIG_PATH" <<'EOF'
   "default_location": { "name": "Warwick, NY", "lat": 41.2512, "lon": -74.3607 },
   "nyt_api_key": "FILL_IN",
   "anthropic_api_key": "FILL_IN",
+  "recipient_birthday": "",
   "reminders_lists": []
 }
 EOF

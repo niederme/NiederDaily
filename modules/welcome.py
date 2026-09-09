@@ -14,14 +14,21 @@ SYSTEM_PROMPT = (
     "Treat events labeled ROUTINE as low-interest background and avoid using them when any worthwhile "
     "news, memory photo, non-routine event, travel, or remarkable weather is available. "
     "A birthday calendar entry belongs to the person named in its title. Never call it John's birthday "
-    "or say 'your birthday' unless the title explicitly says 'John's birthday' or names John Niedermeyer. "
+    "or say 'your birthday' unless the title explicitly says 'John's birthday', names John Niedermeyer, "
+    "or the context includes the line TODAY IS JOHN'S OWN BIRTHDAY. When that line is present the birthday "
+    "really is his, it outranks every other hook, and a calendar entry naming someone else is still theirs. "
+    "Initials, nicknames, and shorthand in an event title never mean John — resolve them only with the "
+    "Calendar shorthand notes provided, and if a name is unfamiliar treat it as a third party. "
     "Do not combine multiple hooks. Do not connect unrelated pieces of context. "
-    "Mention weather only if genuinely remarkable. Do not summarize the day — find one angle and commit to it."
+    "Mention weather only if genuinely remarkable. Do not summarize the day — find one angle and commit to it. "
+    "Return only the greeting sentence. Never explain your choice, weigh candidate hooks aloud, quote these "
+    "instructions, or refer to the context you were given."
 )
 
 CALENDAR_NAME_NOTES = {
     "DC": "Danielle",
     "JN": "John",
+    "JoB": "Jobeth Leon",
 }
 
 # Maps substrings found in calendar event titles to context notes injected into the prompt.
@@ -38,6 +45,24 @@ ROUTINE_EVENT_KEYWORDS = (
 )
 
 
+def _is_recipient_birthday(birthday: str | None, today: date) -> bool:
+    """True when today is the recipient's own birthday.
+
+    Accepts "YYYY-MM-DD" or "MM-DD" — only month and day are compared, so the
+    birth year stays optional and is never needed to match.
+    """
+    if not birthday:
+        return False
+    parts = str(birthday).strip().split("-")
+    if len(parts) < 2:
+        return False
+    try:
+        month, day = int(parts[-2]), int(parts[-1])
+    except ValueError:
+        return False
+    return (today.month, today.day) == (month, day)
+
+
 def _is_routine_event(event: dict) -> bool:
     title = event.get("title") or ""
     return any(keyword.casefold() in title.casefold() for keyword in ROUTINE_EVENT_KEYWORDS)
@@ -51,6 +76,7 @@ def welcome_block(
     photo: tuple | None = None,
     messages: dict | None = None,
     tweet: dict | None = None,
+    recipient_birthday: str | None = None,
     as_of: date | None = None,
 ) -> str | None:
     if not api_key:
@@ -63,6 +89,9 @@ def welcome_block(
         date_str = today.strftime("%B %-d, %Y")
 
         parts = [f"Today is {day_name}, {date_str}."]
+
+        if _is_recipient_birthday(recipient_birthday, today):
+            parts.append("TODAY IS JOHN'S OWN BIRTHDAY — the recipient's own, not a third party's.")
 
         if weather_data and weather_data.get("locations"):
             w = weather_data["locations"][0]
