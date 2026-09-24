@@ -1,4 +1,5 @@
 import json
+import math
 from pathlib import Path
 
 REQUIRED_KEYS = ["recipient_email", "default_location", "nyt_api_key", "anthropic_api_key", "weatherkit"]
@@ -28,4 +29,8 @@ def load_config(path: str = None) -> dict:
             raise ConfigError(f"Missing required weatherkit config key: {sub}")
         if not wk[sub] or wk[sub] == "FILL_IN":
             raise ConfigError(f"weatherkit config key not filled in: {sub}")
+    min_miles = cfg.get("weather_travel_min_miles", 25)
+    if (isinstance(min_miles, bool) or not isinstance(min_miles, (int, float))
+            or not math.isfinite(min_miles) or min_miles < 0):
+        raise ConfigError("weather_travel_min_miles must be a finite, non-negative number")
     return cfg

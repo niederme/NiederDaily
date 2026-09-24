@@ -4,6 +4,7 @@ import jwt
 import time
 import requests
 from datetime import date, datetime
+from math import asin, cos, radians, sin, sqrt
 from pathlib import Path
 
 import anthropic
@@ -273,10 +274,20 @@ def weather_sentence(loc: dict, api_key: str) -> str:
 DEFAULT_TRAVEL_CALENDARS = {"Little York", "niederCal", "TripIt"}
 
 LOCATION_BLACKLIST = {"harriman", "hoboken", "secaucus", "woodbury"}
+DEFAULT_TRAVEL_MIN_MILES = 25
 
 # Event titles containing these strings are sports calendar subscriptions.
 # They should not trigger travel weather — John watches from home on TV.
 SPORTS_TITLE_BLACKLIST = {"buffalo sabres", "buffalo bills"}
+
+
+def _distance_miles(origin: dict, destination: dict) -> float:
+    """Great-circle distance between two latitude/longitude locations."""
+    lat1, lat2 = radians(origin["lat"]), radians(destination["lat"])
+    dlat = lat2 - lat1
+    dlon = radians(destination["lon"] - origin["lon"])
+    a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
+    return 3958.7613 * 2 * asin(sqrt(min(1.0, max(0.0, a))))
 
 
 def weather_block(config: dict, calendar_events: list) -> dict | None:
@@ -288,6 +299,7 @@ def weather_block(config: dict, calendar_events: list) -> dict | None:
     travel = None
     travel_city = None
     travel_calendars = set(config.get("weather_calendars", DEFAULT_TRAVEL_CALENDARS))
+    min_miles = config.get("weather_travel_min_miles", DEFAULT_TRAVEL_MIN_MILES)
     for event in sorted(calendar_events, key=lambda e: (e.get("all_day", True), e.get("start", ""))):
         source_calendar = event.get("calendar")
         if source_calendar not in travel_calendars:
@@ -301,13 +313,14 @@ def weather_block(config: dict, calendar_events: list) -> dict | None:
         geo = geocode_location(loc)
         if geo is None:
             continue
+        if _distance_miles(default, geo) <= min_miles:
+            continue
         city_lower = geo["name"].split(",")[0].strip().lower()
         if any(b in city_lower for b in LOCATION_BLACKLIST):
             continue
-        if default["name"].split(",")[0].lower() not in geo["name"].lower():
-            travel = fetch_weather(geo["lat"], geo["lon"], geo["name"].split(",")[0].strip(), config)
-            travel_city = geo["name"].split(",")[0].strip()
-            break
+        travel = fetch_weather(geo["lat"], geo["lon"], geo["name"].split(",")[0].strip(), config)
+        travel_city = geo["name"].split(",")[0].strip()
+        break
 
     locations = [home]
     if travel:
