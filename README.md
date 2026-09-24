@@ -85,13 +85,18 @@ Create `~/.niederdaily/config.json`:
   "default_location": { "name": "Warwick, NY", "lat": 41.2512, "lon": -74.3607 },
   "nyt_api_key": "YOUR_NYT_KEY",
   "anthropic_api_key": "YOUR_ANTHROPIC_KEY",
-  "reminders_lists": [],
+  "reminders_lists": ["Little York", "Bills", "Niedertodo", "Subscriptions", "Ben", "Jack"],
   "calendars": [],
-  "weather_calendars": ["Little York", "niederCal", "TripIt"]
+  "weather_calendars": ["Little York", "niederCal", "TripIt"],
+  "weather_travel_min_miles": 25
 }
 ```
 
 Required keys are defined in [`config.py`](/Users/niederme/~Repos/NiederDaily/config.py). Calendar and weather calendar lists are optional filters.
+
+The reminder list example includes the shared `Ben` and `Jack` lists alongside the existing household lists. Reminder items retain their list names so each child's tasks can be identified. An empty `reminders_lists` array includes all available lists. The active configuration lives outside Git at `~/.niederdaily/config.json`.
+
+Travel weather is included only for destinations more than `weather_travel_min_miles` from `default_location` (default: 25 miles, measured in a straight line). Nearby appointments, including Goshen, use the home forecast. Existing calendar, sports-event, and excluded-city filters still apply.
 
 ### 3. Add Gmail OAuth credentials
 

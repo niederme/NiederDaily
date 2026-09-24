@@ -292,6 +292,70 @@ def test_weather_block_skips_phone_number_event_location(requests_mock):
     assert result["travel_city"] is None
     assert nominatim.called is False
 
+
+def test_distance_miles_uses_coordinates():
+    from modules.weather import _distance_miles
+
+    origin = {"lat": 0, "lon": 0}
+    assert _distance_miles(origin, origin) == 0
+    assert _distance_miles(origin, {"lat": 0, "lon": 1}) == pytest.approx(69.0934, abs=0.001)
+
+
+@pytest.mark.parametrize("radius, expected_city", [(None, None), (5, "Goshen")])
+def test_weather_block_nearby_destination_uses_configurable_radius(radius, expected_city):
+    from modules.weather import weather_block
+
+    config = dict(WEATHERKIT_CONFIG)
+    if radius is not None:
+        config["weather_travel_min_miles"] = radius
+    home = {"location": "Warwick, NY"}
+    goshen = {"name": "Goshen, NY", "lat": 41.402, "lon": -74.324}
+    events = [{"title": "Appointment", "location": "Goshen, NY", "calendar": "Little York"}]
+    with patch("modules.weather.geocode_location", return_value=goshen), patch(
+        "modules.weather.fetch_weather", return_value=home
+    ) as fetch:
+        result = weather_block(config, events)
+
+    assert result["travel_city"] == expected_city
+    assert len(result["locations"]) == (2 if expected_city else 1)
+    assert fetch.call_count == (2 if expected_city else 1)
+
+
+def test_weather_block_skips_nearby_event_and_finds_later_trip():
+    from modules.weather import weather_block
+
+    events = [
+        {"location": "Goshen, NY", "calendar": "Little York", "start": "08:00"},
+        {"location": "New York, NY", "calendar": "Little York", "start": "12:00"},
+    ]
+    destinations = [
+        {"name": "Goshen, NY", "lat": 41.402, "lon": -74.324},
+        {"name": "New York, NY", "lat": 40.7128, "lon": -74.006},
+    ]
+    with patch("modules.weather.geocode_location", side_effect=destinations), patch(
+        "modules.weather.fetch_weather", side_effect=[{"location": "Warwick"}, {"location": "New York"}]
+    ) as fetch:
+        result = weather_block(WEATHERKIT_CONFIG, events)
+
+    assert result["travel_city"] == "New York"
+    assert len(result["locations"]) == 2
+    assert fetch.call_count == 2
+    assert fetch.call_args.args[:3] == (40.7128, -74.006, "New York")
+
+
+def test_weather_block_distant_city_with_same_name_is_travel():
+    from modules.weather import weather_block
+
+    events = [{"location": "Warwick, RI", "calendar": "Little York"}]
+    destination = {"name": "Warwick, RI", "lat": 41.7001, "lon": -71.4162}
+    with patch("modules.weather.geocode_location", return_value=destination), patch(
+        "modules.weather.fetch_weather", return_value={"location": "Warwick"}
+    ) as fetch:
+        result = weather_block(WEATHERKIT_CONFIG, events)
+
+    assert result["travel_city"] == "Warwick"
+    assert fetch.call_count == 2
+
 def test_weather_block_ignores_events_from_non_travel_calendars(requests_mock):
     requests_mock.get(
         "https://weatherkit.apple.com/api/v1/weather/en/41.2512/-74.3607",
