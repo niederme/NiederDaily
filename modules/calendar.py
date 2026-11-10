@@ -95,6 +95,18 @@ def _format_time_label(event) -> str | None:
     return start_dt.strftime("%-I:%M%p").lower()
 
 
+def _delivery_end_time(event, calendar_name) -> str | None:
+    """Preserve a same-day Parcel window without inventing ordinary event duration."""
+    if (calendar_name or "").casefold() != "parcel" or event.isAllDay():
+        return None
+    try:
+        start = datetime.fromtimestamp(event.startDate().timeIntervalSince1970())
+        end = datetime.fromtimestamp(event.endDate().timeIntervalSince1970())
+        return end.strftime("%-I:%M%p").lower() if end.date() == start.date() and end > start else None
+    except (AttributeError, TypeError, ValueError, OSError, OverflowError):
+        return None
+
+
 def _calendar_name(event) -> str | None:
     try:
         calendar = event.calendar()
@@ -178,11 +190,13 @@ def calendar_block(calendars: list | None = None, as_of: date | None = None) -> 
                 continue
             time_val = _format_time_label(event)
             location = (event.location() or "").strip()
+            calendar_name = _calendar_name(event)
             events.append({
                 "time": time_val,
                 "title": title,
                 "location": location,
-                "calendar": _calendar_name(event),
+                "calendar": calendar_name,
+                "end_time": _delivery_end_time(event, calendar_name),
                 "identifier": _calendar_identifier(event),
                 "calendar_color": _calendar_color(event),
                 "all_day": time_val is None,
