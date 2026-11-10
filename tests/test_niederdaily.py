@@ -13,6 +13,7 @@ def test_modules_run_in_correct_order(mocker):
     mocker.patch("modules.messages.messages_block", return_value=None)
     mocker.patch("modules.photo.photo_block", return_value=None)
     mocker.patch("modules.nyt.nyt_block", return_value=None)
+    mocker.patch("modules.tweet.tweet_block", return_value=None)
     mocker.patch("renderer.render_email", return_value=MagicMock())
     mocker.patch("sender.send_email", return_value=True)
     mocker.patch("config.load_config", return_value={
@@ -36,6 +37,7 @@ def test_failed_module_does_not_crash_run(mocker):
     mocker.patch("modules.messages.messages_block", return_value=None)
     mocker.patch("modules.photo.photo_block", return_value=None)
     mocker.patch("modules.nyt.nyt_block", return_value=None)
+    mocker.patch("modules.tweet.tweet_block", return_value=None)
     mocker.patch("renderer.render_email", return_value=MagicMock())
     mocker.patch("sender.send_email", return_value=True)
     mocker.patch("config.load_config", return_value={
@@ -54,8 +56,11 @@ def test_preflight_passes_with_optional_warnings(mocker, tmp_path, capsys):
     import niederdaily
 
     app = importlib.reload(niederdaily)
+    mocker.patch.object(app, "tweet_block", return_value=None)
+    mocker.patch.object(app, "contacts_access_granted", return_value=True)
+    mocker.patch("modules.weather._make_jwt", return_value="synthetic-test-token")
     config_dir = tmp_path / ".niederdaily"
-    config_dir.mkdir()
+    config_dir.mkdir(exist_ok=True)
     (config_dir / "client_secret.json").write_text("{}")
 
     mocker.patch.object(app.cfg, "load_config", return_value={
@@ -104,8 +109,11 @@ def test_preflight_blocks_when_gmail_auth_fails(mocker, tmp_path, capsys):
     import niederdaily
 
     app = importlib.reload(niederdaily)
+    mocker.patch.object(app, "tweet_block", return_value=None)
+    mocker.patch.object(app, "contacts_access_granted", return_value=True)
+    mocker.patch("modules.weather._make_jwt", return_value="synthetic-test-token")
     config_dir = tmp_path / ".niederdaily"
-    config_dir.mkdir()
+    config_dir.mkdir(exist_ok=True)
     (config_dir / "client_secret.json").write_text("{}")
     chat_db = tmp_path / "chat.db"
     chat_db.write_text("")

@@ -86,3 +86,16 @@ def test_calendar_block_sorts_timed_events_chronologically(mocker):
 
     assert result[0]["title"] == "Early standup"
     assert result[1]["title"] == "Late meeting"
+
+
+def test_parcel_window_end_is_preserved_without_native_access():
+    event = _make_event("Example Store", 1742979600)
+    event.endDate.return_value = _FakeNSDate(1742986800)
+    assert calendar._delivery_end_time(event, "Parcel") is not None
+    assert calendar._delivery_end_time(event, "Personal") is None
+    event.endDate.return_value = _FakeNSDate(1742979600 - 60)
+    assert calendar._delivery_end_time(event, "Parcel") is None
+    event.endDate.return_value = _FakeNSDate(1742979600 + 86400)
+    assert calendar._delivery_end_time(event, "Parcel") is None
+    event.endDate.return_value = None
+    assert calendar._delivery_end_time(event, "Parcel") is None

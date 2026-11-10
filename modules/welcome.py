@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import anthropic
+import json
 from datetime import date
+
+from modules.opening_safety import calendar_kind, opening_rejection, package_context
 
 SYSTEM_PROMPT = (
     "You write a single witty, warm, first-person morning greeting for a personal daily newsletter. "
@@ -16,6 +19,9 @@ SYSTEM_PROMPT = (
     "A birthday calendar entry belongs to the person named in its title. Never call it John's birthday "
     "or say 'your birthday' unless the title explicitly says 'John's birthday' or names John Niedermeyer. "
     "Do not combine multiple hooks. Do not connect unrelated pieces of context. "
+    "Parcel calendar entries are delivery context, not pickups, errands, or attendance commitments. "
+    "An estimated delivery window is not an appointment at its start time. Never join calendar and package records by merchant name alone. "
+    "Keep reminder actions literal: a check is not a call, order, booking, or payment. Do not invent urgency, consequences, or how long an item has waited. "
     "Mention weather only if genuinely remarkable. Do not summarize the day — find one angle and commit to it."
 )
 
@@ -52,10 +58,12 @@ def welcome_block(
     messages: dict | None = None,
     tweet: dict | None = None,
     as_of: date | None = None,
+    reminders: dict | None = None,
+    packages: dict | None = None,
 ) -> str | None:
     if not api_key:
         return None
-    if not weather_data and not calendar_events:
+    if not any((weather_data, calendar_events, nyt_stories, photo, tweet, reminders, packages)):
         return None
     try:
         today = as_of or date.today()
@@ -84,7 +92,15 @@ def welcome_block(
                 for event in ordered[:6]:
                     priority = "ROUTINE" if _is_routine_event(event) else "CANDIDATE"
                     when = "all day" if event.get("all_day") else event.get("time", "time unknown")
-                    event_lines.append(f"[{priority}] {event['title']} ({when})")
+                    kind = calendar_kind(event)
+                    if kind == "delivery":
+                        # Parcel's start alone is never a pickup appointment or exact ETA.
+                        when = (f"estimated window {when}–{event['end_time']}"
+                                if event.get("end_time") else "delivery timing not established")
+                    event_lines.append(
+                        f"[{priority}] {event['title']} ({when}; "
+                        f"source calendar: {event.get('calendar') or 'unknown'}; type: {kind}; "
+                        f"owner: {event.get('owner') or 'unknown'})")
                 parts.append("CALENDAR OPTIONS, ranked by editorial interest: " + " / ".join(event_lines) + ".")
 
             titles = " ".join((e.get("title") or "") for e in calendar_events)
@@ -103,6 +119,22 @@ def welcome_block(
             ]
             if matched_context:
                 parts.append("Context: " + " ".join(matched_context))
+
+        if reminders:
+            reminder_lines = []
+            for bucket in ("today", "overdue", "upcoming"):
+                for item in reminders.get(bucket, [])[:5]:
+                    reminder_lines.append(
+                        f"[{bucket.upper()}] {item.get('title') or ''} "
+                        f"(list: {item.get('list') or 'unknown'}; due: {item.get('due') or 'unspecified'})"
+                    )
+            if reminder_lines:
+                parts.append("REMINDERS: " + " / ".join(reminder_lines))
+
+        parcel_facts = package_context(packages)
+        if parcel_facts:
+            parts.append("PARCEL FACTS (separate records; estimates, not appointments; "
+                         "coverage may be incomplete): " + json.dumps(parcel_facts, ensure_ascii=False))
 
         if nyt_stories:
             titles = " / ".join(f'"{s["title"]}"' for s in nyt_stories[:3] if s.get("title"))
@@ -134,8 +166,7 @@ def welcome_block(
                 label = f"TWEET YOU LIKED{f' (by @{handle})' if handle else ''}"
             parts.append(f'{label}: "{text}"')
 
-        if messages and messages.get("thread_count", 0) > 0:
-            parts.append(f"MESSAGES: {messages['summary']}")
+        # A generated Messages quip is not evidence of an unanswered message.
 
         user_prompt = " ".join(parts)
 
@@ -146,6 +177,16 @@ def welcome_block(
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_prompt}],
         )
-        return response.content[0].text.strip()
+        return validate_opening(response.content[0].text, calendar_events=calendar_events,
+                                weather_data=weather_data, reminders=reminders, packages=packages)
     except Exception:
         return None
+
+
+def validate_opening(text, *, calendar_events=None, weather_data=None, reminders=None, packages=None):
+    """Omit recognized unsupported claims; this is not a general fact checker."""
+    if not isinstance(text, str) or not text.strip():
+        return None
+    if opening_rejection(text, calendar_events or [], reminders, packages):
+        return None
+    return text.strip()

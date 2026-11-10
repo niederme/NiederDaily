@@ -155,7 +155,7 @@ def test_welcome_block_includes_bookmarked_tweet_in_prompt(mocker):
     assert "Local-first is the future." in prompt_text
 
 
-def test_welcome_block_includes_message_summary_in_prompt(mocker):
+def test_welcome_block_excludes_unreliable_message_summary(mocker):
     mock_client = MagicMock()
     mock_client.messages.create.return_value = MagicMock(
         content=[MagicMock(text="Apparently I spent yesterday accumulating timestamps instead of responses.")]
@@ -169,5 +169,5 @@ def test_welcome_block_includes_message_summary_in_prompt(mocker):
     welcome_block("sk-ant-test", weather_data=WEATHER, calendar_events=EVENTS, messages=messages)
     call_args = mock_client.messages.create.call_args
     prompt_text = call_args.kwargs["messages"][0]["content"]
-    assert "MESSAGES" in prompt_text
-    assert "clearing its throat for a reply" in prompt_text
+    assert "MESSAGES" not in prompt_text
+    assert "clearing its throat for a reply" not in prompt_text

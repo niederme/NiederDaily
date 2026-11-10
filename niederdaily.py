@@ -49,7 +49,7 @@ def run(config_path: str = None, as_of=None):
 
     # Steps 3-6: independent modules
     reminders = _safe(reminders_block, conf.get("reminders_lists", []), as_of=as_of)
-    messages  = _safe(messages_block, conf["anthropic_api_key"])
+    messages  = None  # Unreliable reply-state quip is not source evidence.
     photo     = _safe(photo_block, conf["anthropic_api_key"], as_of=as_of)
     tweet     = _safe(tweet_block, as_of=as_of)
     nyt       = _safe(nyt_block, conf.get("nyt_api_key"))
@@ -58,6 +58,7 @@ def run(config_path: str = None, as_of=None):
     welcome = _safe(welcome_block, conf["anthropic_api_key"],
                     weather_data=weather, calendar_events=calendar,
                     nyt_stories=nyt, photo=photo, messages=messages, tweet=tweet,
+                    reminders=reminders,
                     as_of=as_of)
 
     msg = render_email(
