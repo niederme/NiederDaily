@@ -87,6 +87,7 @@ Create `~/.niederdaily/config.json`:
   "anthropic_api_key": "YOUR_ANTHROPIC_KEY",
   "reminders_lists": ["Little York", "Bills", "Niedertodo", "Subscriptions", "Ben", "Jack"],
   "calendars": [],
+  "calendar_hide_from_list": [],
   "weather_calendars": ["Little York", "niederCal", "TripIt"],
   "weather_travel_min_miles": 25
 }
@@ -94,9 +95,61 @@ Create `~/.niederdaily/config.json`:
 
 Required keys are defined in [`config.py`](/Users/niederme/~Repos/NiederDaily/config.py). Calendar and weather calendar lists are optional filters.
 
+`calendar_hide_from_list` names calendars that are still read (they inform the opening, location and travel weather) but are left out of the email's Calendar list, matched case-insensitively against the configured calendar name, e.g. `["Work", "Deliveries", "Birthdays"]`. The list also always omits commute timetable legs (`commute.transit_lines`) and bare "Travel"/"Commute" holds.
+
 The reminder list example includes the shared `Ben` and `Jack` lists alongside the existing household lists. Reminder items retain their list names so each child's tasks can be identified. An empty `reminders_lists` array includes all available lists. The active configuration lives outside Git at `~/.niederdaily/config.json`.
 
 Travel weather is included only for destinations more than `weather_travel_min_miles` from `default_location` (default: 25 miles, measured in a straight line). Nearby appointments, including Goshen, use the home forecast. Existing calendar, sports-event, and excluded-city filters still apply.
+
+### Personal conventions (optional)
+
+The opening paragraph knows nothing about you until you tell it. Every personal convention lives in `config.json`; the code ships neutral defaults (the reader is called "the reader", nobody else is in the household, there is no commute, and no calendar entry places you anywhere). All keys are optional:
+
+```json
+{
+  "owner_name": "Jordan",
+  "owner_full_name": "Jordan Doe",
+  "employer": "Acme",
+  "day_marker_prefixes": ["JD"],
+  "home_keywords": ["home", "wfh", "springfield"],
+  "home_label": "Springfield",
+  "household_prefixes": {"AB": "Alex"},
+  "own_calendars": ["Home", "Work"],
+  "calendar_aliases": {"Work": {"title": "Calendar", "source_type": "exchange"}},
+  "event_context": {"Dr. Lee": "Dr. Lee is Jordan's therapist; the session is a weekly appointment."},
+  "routine_event_keywords": ["school bus"],
+  "appointment_aliases": {"therapy": ["Dr. Lee"], "therapist": ["Dr. Lee"]},
+  "prompt_notes": ["The rent reminder is Jordan paying Alex back; the rent itself is paid."],
+  "reminders_suppressed_titles": ["Morning pills"],
+  "reminder_title_overrides": [{"title": "Check filter!", "list": "Home", "newsletter_title": "Replace the furnace filter!"}],
+  "commute": {
+    "city": "Boston",
+    "city_aliases": ["BOS"],
+    "location_keywords": ["Boston, MA", "South Station"],
+    "transit_lines": ["Metro"],
+    "mode": "bus",
+    "depart": "7:05am",
+    "home": "7:40pm",
+    "arrival_stop": "Springfield"
+  },
+  "opening_history_path": "~/.niederdaily/state/opening_mentions.json"
+}
+```
+
+- `owner_name` / `owner_full_name`: how the opening refers to you, and whose birthday counts as yours.
+- `employer`: named when work reminders give context.
+- `day_marker_prefixes`: all-day events titled `<PREFIX>: <place>` say where you are that day. A place in `home_keywords` is a home day, a `commute.city` or one of its `city_aliases` is a commute day, anything else is a trip. With no marker or other evidence, the opening is told your location is unknown and never assumes you are home.
+- `home_label`: how your home is named in the location line.
+- `household_prefixes`: title prefixes for other people's items (`"AB: Dentist"` belongs to Alex). They are household awareness, not your tasks, and never place you anywhere.
+- `own_calendars`: only timed events on these calendars located in the commute city (`commute.location_keywords`) imply a commute day; subscribed calendars never do.
+- `calendar_aliases`: configured calendar names that are not EventKit titles. `source_type: "exchange"` requires the calendar to live on an Exchange account; `null` matches any account. Calendar names otherwise match exactly, then by a single case-insensitive match; unmatched or ambiguous names are skipped with a logged warning.
+- `event_context`: title substring to a sentence of context about a recurring person or event, added to the prompt when the title appears.
+- `routine_event_keywords`: events whose titles contain these are ranked as low-interest background.
+- `appointment_aliases`: calendar title keywords that substantiate an appointment word in the opening (otherwise "therapy" must appear in a title).
+- `prompt_notes`: extra household facts appended to the opening's instructions.
+- `reminders_suppressed_titles`: reminders kept in Apple Reminders but left out of the newsletter. `reminder_title_overrides` clarifies a terse title in the newsletter only (optionally scoped to one list); the source reminder is never changed.
+- `commute`: the commute city and how to read its timetable. Events titled `<transit line> <number> Inbound|Outbound` are timetable options, not bookings: an Inbound event places you in the city, and the latest Outbound arrival bounds your return. `depart` / `home` are the usual times used when the calendar has a commute-day marker but no timetable events.
+- `opening_history_path`: where the opening records which reminders it mentioned, so the same item is not raised again for a week. Only a real daily send (not a `--date` run) reads or writes it.
 
 ### 3. Add Gmail OAuth credentials
 

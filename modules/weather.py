@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import jwt
+import re
 import time
 import requests
 from datetime import date, datetime
@@ -8,6 +9,7 @@ from math import asin, cos, radians, sin, sqrt
 from pathlib import Path
 
 import anthropic
+from modules.calendar import is_transit_option
 
 WEATHERKIT_URL = "https://weatherkit.apple.com/api/v1/weather/en"
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
@@ -298,11 +300,15 @@ def weather_block(config: dict, calendar_events: list) -> dict | None:
 
     travel = None
     travel_city = None
-    travel_calendars = set(config.get("weather_calendars", DEFAULT_TRAVEL_CALENDARS))
+    travel_confirmed = False
+    # Case-insensitive, like calendar selection ("TripIt" vs the provider's "Tripit").
+    travel_calendars = {c.casefold() for c in config.get("weather_calendars", DEFAULT_TRAVEL_CALENDARS)}
     min_miles = config.get("weather_travel_min_miles", DEFAULT_TRAVEL_MIN_MILES)
     for event in sorted(calendar_events, key=lambda e: (e.get("all_day", True), e.get("start", ""))):
-        source_calendar = event.get("calendar")
-        if source_calendar not in travel_calendars:
+        if event.get("all_day") or is_transit_option(event):
+            continue
+        source_calendar = event.get("calendar") or ""
+        if source_calendar.casefold() not in travel_calendars:
             continue
         title_lower = (event.get("title") or "").lower()
         if any(s in title_lower for s in SPORTS_TITLE_BLACKLIST):
@@ -320,10 +326,16 @@ def weather_block(config: dict, calendar_events: list) -> dict | None:
             continue
         travel = fetch_weather(geo["lat"], geo["lon"], geo["name"].split(",")[0].strip(), config)
         travel_city = geo["name"].split(",")[0].strip()
+        title = (event.get("title") or "").casefold()
+        travel_confirmed = bool(
+            travel and (source_calendar.casefold() == "tripit" or re.search(r"\b(?:flight|trip|travel)\b", title))
+            and not re.search(r"\b(?:cancelled|canceled|hold|tentative)\b", title)
+        )
         break
 
     locations = [home]
     if travel:
         locations.append(travel)
 
-    return {"locations": locations, "travel_city": travel_city}
+    return {"locations": locations, "travel_city": travel_city,
+            "travel_confirmed": travel_confirmed}

@@ -221,3 +221,20 @@ def test_render_calendar_section_includes_event_title():
     html = _html_from_message(msg)
     assert "Weekly sync" in html
     assert "Personal" in html
+
+
+def test_welcome_preserves_paragraphs_and_escapes_text():
+    msg = render_email(
+        recipient="me@example.com", welcome="First <priority>.\n\nSecond & final.",
+        weather=None, calendar=None, reminders=None, messages=None, photo=None, nyt=None
+    )
+    html = _html_from_message(msg)
+    assert '<p>First &lt;priority&gt;.</p><p>Second &amp; final.</p>' in html
+
+
+def test_render_welcome_paragraphs_become_separate_p_tags():
+    msg = render_email(recipient="me@example.com", welcome="City day today.\n\nThe game is on at 7.",
+                       weather=None, calendar=None, reminders=None, messages=None,
+                       photo=None, nyt=None)
+    html = _html_from_message(msg)
+    assert '<div class="welcome"><p>City day today.</p><p>The game is on at 7.</p></div>' in html
