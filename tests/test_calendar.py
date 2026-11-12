@@ -210,3 +210,39 @@ def test_unmatched_names_warn(caplog):
 def test_exact_title_wins_over_alias(caplog):
     work = _Cal("Work", 0, "w")
     assert _select([work, _Cal("Calendar", 1, "ex")], ["Work"], caplog) == [work]
+
+
+def test_route_style_titles_on_configured_lines_are_transit():
+    _transit_profile()
+    assert calendar.is_transit_option({"title": "Coach | Park and Ride → Downtown"})
+    assert not calendar.is_transit_option({"title": "Coach schedule review"})
+
+
+def test_calendar_list_events_hides_commute_noise_and_hidden_calendars():
+    _transit_profile()
+    events = [
+        {"time": "6:36am", "title": "Metro 48 Inbound", "calendar": "Home", "all_day": False},
+        {"time": "9:00am", "title": "Review meeting", "calendar": "Home", "all_day": False},
+        {"time": "10:30am", "title": "Weekly meeting", "calendar": "Work", "all_day": False},
+        {"time": "3:00pm", "title": "Travel", "calendar": "Work", "all_day": False},
+        {"time": "3:30pm", "title": "Package - UPS", "calendar": "Deliveries", "all_day": False},
+        {"time": "3:35pm", "title": "Coach | Downtown → Park and Ride", "calendar": "Home", "all_day": False},
+        {"time": "4:45pm", "title": "School pickup", "calendar": "Family", "all_day": False},
+        {"time": None, "title": "JD: Boston", "calendar": "Family", "all_day": True},
+        {"time": None, "title": "Someone's birthday", "calendar": "Birthdays", "all_day": True},
+    ]
+
+    shown = calendar.calendar_list_events(events, ["work", "DELIVERIES", "Birthdays"])
+
+    assert [e["title"] for e in shown] == ["Review meeting", "School pickup", "JD: Boston"]
+    assert len(events) == 9  # the full set is untouched for the opening and location logic
+
+
+def test_calendar_list_events_without_hidden_calendars_keeps_other_events():
+    events = [
+        {"time": "5:00pm", "title": "Commute", "calendar": "Work", "all_day": False},
+        {"time": "6:00pm", "title": "Travel to Buffalo", "calendar": "Work", "all_day": False},
+    ]
+
+    assert [e["title"] for e in calendar.calendar_list_events(events)] == ["Travel to Buffalo"]
+    assert calendar.calendar_list_events(None) is None

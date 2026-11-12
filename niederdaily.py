@@ -16,7 +16,7 @@ logging.basicConfig(
 
 import config as cfg
 from modules.weather import weather_block, weather_sentence
-from modules.calendar import calendar_block, calendar_access_granted
+from modules.calendar import calendar_block, calendar_access_granted, calendar_list_events
 from modules.welcome import welcome_block
 from modules import opening_history, profile
 from modules.reminders import reminders_block, reminders_access_granted
@@ -71,7 +71,7 @@ def run(config_path: str = None, as_of=None):
         recipient=conf["recipient_email"],
         welcome=welcome,
         weather=weather,
-        calendar=calendar,
+        calendar=calendar_list_events(calendar, conf.get("calendar_hide_from_list")),
         reminders=reminders,
         messages=messages,
         photo=photo,

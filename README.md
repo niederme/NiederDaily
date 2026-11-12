@@ -87,12 +87,15 @@ Create `~/.niederdaily/config.json`:
   "anthropic_api_key": "YOUR_ANTHROPIC_KEY",
   "reminders_lists": ["Little York", "Bills", "Niedertodo", "Subscriptions", "Ben", "Jack"],
   "calendars": [],
+  "calendar_hide_from_list": [],
   "weather_calendars": ["Little York", "niederCal", "TripIt"],
   "weather_travel_min_miles": 25
 }
 ```
 
 Required keys are defined in [`config.py`](/Users/niederme/~Repos/NiederDaily/config.py). Calendar and weather calendar lists are optional filters.
+
+`calendar_hide_from_list` names calendars that are still read (they inform the opening, location and travel weather) but are left out of the email's Calendar list, matched case-insensitively against the configured calendar name, e.g. `["Work", "Deliveries", "Birthdays"]`. The list also always omits commute timetable legs (`commute.transit_lines`) and bare "Travel"/"Commute" holds.
 
 The reminder list example includes the shared `Ben` and `Jack` lists alongside the existing household lists. Reminder items retain their list names so each child's tasks can be identified. An empty `reminders_lists` array includes all available lists. The active configuration lives outside Git at `~/.niederdaily/config.json`.
 

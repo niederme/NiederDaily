@@ -19,7 +19,7 @@ log = logging.getLogger(__name__)
 
 
 def is_transit_option(event: dict) -> bool:
-    """Timetable alternatives ("<line> 12 Inbound") are context, not evidence of a booked trip.
+    """Timetable entries ("<line> 12 Inbound", "<line> | A → B") are commute legs, not appointments.
 
     The line names come from the configured commute's `transit_lines`.
     """
@@ -28,7 +28,30 @@ def is_transit_option(event: dict) -> bool:
         return False
     title = event.get("title") or ""
     names = "|".join(re.escape(line) for line in lines)
-    return bool(re.match(rf"^(?:{names})\s+\d+\s+(?:Inbound|Outbound)\b", title, re.I))
+    return bool(re.match(rf"^(?:{names})\s+(?:\d+\s+(?:Inbound|Outbound)\b|\|)", title, re.I))
+
+
+_COMMUTE_HOLD = re.compile(r"^\s*(?:travel|travel time|commute|commuting)\s*$", re.I)
+
+
+def is_commute_hold(event: dict) -> bool:
+    """A bare "Travel" or "Commute" hold is the trip itself; the day marker already covers it."""
+    return bool(_COMMUTE_HOLD.match(event.get("title") or ""))
+
+
+def calendar_list_events(events: list | None, hidden_calendars: list | None = None) -> list | None:
+    """Events shown in the email's Calendar list.
+
+    The full set still feeds the opening, location and weather logic; this only trims the
+    visible list: commute timetable legs, bare commute/travel holds, and whole calendars
+    kept for context but not listed (config `calendar_hide_from_list`).
+    """
+    if events is None:
+        return None
+    hidden = {name.casefold() for name in (hidden_calendars or []) if name}
+    return [e for e in events
+            if not is_transit_option(e) and not is_commute_hold(e)
+            and (e.get("calendar") or "").casefold() not in hidden]
 
 
 def _event_store():

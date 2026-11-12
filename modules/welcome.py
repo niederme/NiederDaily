@@ -5,7 +5,7 @@ import json
 from datetime import date
 import re
 
-from modules.calendar import is_transit_option
+from modules.calendar import is_commute_hold, is_transit_option
 from modules.day_location import derive_location, is_day_marker, location_line
 from modules.opening_history import filter_for_prompt
 from modules import profile
@@ -93,12 +93,9 @@ def _calendar_name_notes() -> dict:
     return notes
 
 
-_COMMUTE_BLOCK = re.compile(r"^\s*(?:travel|travel time|commute|commuting)\s*$", re.I)
-
-
 def _is_commute_block(event: dict) -> bool:
     """A bare "Travel" hold on the work calendar is the trip home, already covered by LOCATION."""
-    return bool(_COMMUTE_BLOCK.match(event.get("title") or ""))
+    return is_commute_hold(event)
 
 
 def _is_routine_event(event: dict) -> bool:
