@@ -148,7 +148,7 @@ The opening paragraph knows nothing about you until you tell it. Every personal 
 - `appointment_aliases`: calendar title keywords that substantiate an appointment word in the opening (otherwise "therapy" must appear in a title).
 - `prompt_notes`: extra household facts appended to the opening's instructions.
 - `reminders_suppressed_titles`: reminders kept in Apple Reminders but left out of the newsletter. `reminder_title_overrides` clarifies a terse title in the newsletter only (optionally scoped to one list); the source reminder is never changed.
-- `commute`: the commute city and how to read its timetable. Events titled `<transit line> <number> Inbound|Outbound` are timetable options, not bookings: an Inbound event places you in the city, and the latest Outbound arrival bounds your return. `depart` / `home` are the usual times used when the calendar has a commute-day marker but no timetable events.
+- `commute`: the commute city and how to read its timetable. Events titled `<transit line> <number> Inbound|Outbound` are timetable options, not bookings: an Inbound event places you in the city, and the latest Outbound arrival bounds your return. `depart` / `home` are the usual times used when the calendar has a commute-day marker but no timetable events. Commute details only decide where you are: the opening never mentions buses or trains, lines, stops, or departure and return times, and a draft that does (including any `transit_lines` or `arrival_stop` name) is rejected.
 - `opening_history_path`: where the opening records which reminders it mentioned, so the same item is not raised again for a week. Only a real daily send (not a `--date` run) reads or writes it.
 
 ### 3. Add Gmail OAuth credentials
