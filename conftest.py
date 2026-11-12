@@ -38,5 +38,7 @@ def isolated_home_and_side_effects(monkeypatch, tmp_path):
         _VIOLATIONS.append("unmocked model client")
         raise RuntimeError("Offline tests must mock model calls")
     monkeypatch.setattr(anthropic, "Anthropic", deny_model)
+    from modules import profile
+    profile.configure(None)  # Neutral defaults; tests opt into a fixture profile.
     yield
     assert not _VIOLATIONS, "Unexpected external access was caught: " + ", ".join(_VIOLATIONS)

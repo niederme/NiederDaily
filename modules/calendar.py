@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta
 import logging
+import re
 import threading
+
+from modules import profile
 
 try:
     import EventKit
@@ -13,6 +16,19 @@ except ImportError:  # pragma: no cover - exercised in integration environments
 
 
 log = logging.getLogger(__name__)
+
+
+def is_transit_option(event: dict) -> bool:
+    """Timetable alternatives ("<line> 12 Inbound") are context, not evidence of a booked trip.
+
+    The line names come from the configured commute's `transit_lines`.
+    """
+    lines = [line for line in profile.get()["commute"].get("transit_lines") or [] if line]
+    if not lines:
+        return False
+    title = event.get("title") or ""
+    names = "|".join(re.escape(line) for line in lines)
+    return bool(re.match(rf"^(?:{names})\s+\d+\s+(?:Inbound|Outbound)\b", title, re.I))
 
 
 def _event_store():
@@ -80,12 +96,82 @@ def _nsdate_for_local(dt: datetime):
     return NSDate.dateWithTimeIntervalSince1970_(dt.timestamp())
 
 
+# Configured names that are not EventKit calendar titles come from the `calendar_aliases`
+# config map: {"Work": {"title": "Calendar", "source_type": "exchange"}}. A source_type of
+# "exchange" requires the calendar to live on an Exchange account, so an iCloud or local
+# calendar with the same title is never picked up by mistake.
+
+# calendarIdentifier -> configured name, so events show the name the reader configured.
+_DISPLAY_NAMES: dict = {}
+
+
+def _source_kind(cal) -> str | None:
+    try:
+        source = cal.source()
+        if source is None:
+            return None
+        if source.sourceType() == getattr(EventKit, "EKSourceTypeExchange", 1):
+            return "exchange"
+        return "other"
+    except Exception:
+        return None
+
+
+def _calendar_id(cal):
+    try:
+        return cal.calendarIdentifier()
+    except Exception:
+        return None
+
+
 def _selected_calendars(store, calendars: list | None):
     available = list(store.calendarsForEntityType_(EventKit.EKEntityTypeEvent) or [])
     if not calendars:
         return available
-    wanted = set(calendars)
-    return [cal for cal in available if cal.title() in wanted]
+    chosen = []
+    _DISPLAY_NAMES.clear()
+    for name in calendars:
+        exact = [cal for cal in available if cal.title() == name]
+        if exact:
+            chosen.extend(exact)
+            continue
+        # Providers sometimes change a title's case ("TripIt" -> "Tripit").
+        folded = [cal for cal in available if (cal.title() or "").casefold() == name.casefold()]
+        if len(folded) == 1:
+            log.info("Configured calendar %r matched %r ignoring case.", name, folded[0].title())
+            chosen.append(folded[0])
+            continue
+        if len(folded) > 1:
+            log.warning("Configured calendar %r matches %d calendars ignoring case; skipping it.",
+                        name, len(folded))
+            continue
+        alias = (profile.get().get("calendar_aliases") or {}).get(name)
+        if not isinstance(alias, dict) or not alias.get("title"):
+            log.warning("Configured calendar %r matches no calendar; skipping it.", name)
+            continue
+        source_type = alias.get("source_type")
+        matches = [cal for cal in available if cal.title() == alias["title"]
+                   and (source_type is None or _source_kind(cal) == source_type)]
+        if len(matches) == 1:
+            log.info("Configured calendar %r resolved to %r%s.", name, alias["title"],
+                     f" ({source_type} account)" if source_type else "")
+            chosen.append(matches[0])
+            identifier = _calendar_id(matches[0])
+            if identifier:
+                _DISPLAY_NAMES[identifier] = name
+        elif matches:
+            log.warning("Configured calendar %r is ambiguous (%d calendars titled %r); skipping it.",
+                        name, len(matches), alias["title"])
+        else:
+            log.warning("Configured calendar %r (alias for %r) matches no calendar; skipping it.",
+                        name, alias["title"])
+    unique, seen = [], set()
+    for cal in chosen:
+        key = _calendar_id(cal) or id(cal)
+        if key not in seen:
+            seen.add(key)
+            unique.append(cal)
+    return unique
 
 
 def _format_time_label(event) -> str | None:
@@ -95,9 +181,10 @@ def _format_time_label(event) -> str | None:
     return start_dt.strftime("%-I:%M%p").lower()
 
 
-def _delivery_end_time(event, calendar_name) -> str | None:
-    """Preserve a same-day Parcel window without inventing ordinary event duration."""
-    if (calendar_name or "").casefold() != "parcel" or event.isAllDay():
+def _delivery_end_time(event, calendar_name, title: str | None = None) -> str | None:
+    """Preserve a same-day Parcel window or transit arrival without inventing ordinary event duration."""
+    is_transit = is_transit_option({"title": title or ""})
+    if ((calendar_name or "").casefold() != "parcel" and not is_transit) or event.isAllDay():
         return None
     try:
         start = datetime.fromtimestamp(event.startDate().timeIntervalSince1970())
@@ -112,6 +199,9 @@ def _calendar_name(event) -> str | None:
         calendar = event.calendar()
         if calendar is None:
             return None
+        alias = _DISPLAY_NAMES.get(_calendar_id(calendar))
+        if alias:
+            return alias
         title = calendar.title()
         return title.strip() if title else None
     except Exception:
@@ -196,7 +286,7 @@ def calendar_block(calendars: list | None = None, as_of: date | None = None) -> 
                 "title": title,
                 "location": location,
                 "calendar": calendar_name,
-                "end_time": _delivery_end_time(event, calendar_name),
+                "end_time": _delivery_end_time(event, calendar_name, title),
                 "identifier": _calendar_identifier(event),
                 "calendar_color": _calendar_color(event),
                 "all_day": time_val is None,

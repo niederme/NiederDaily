@@ -18,6 +18,7 @@ import config as cfg
 from modules.weather import weather_block, weather_sentence
 from modules.calendar import calendar_block, calendar_access_granted
 from modules.welcome import welcome_block
+from modules import opening_history, profile
 from modules.reminders import reminders_block, reminders_access_granted
 from modules.messages import messages_block, contacts_access_granted
 from modules.photo import photo_access_granted, photo_block
@@ -33,6 +34,7 @@ def run(config_path: str = None, as_of=None):
     except cfg.ConfigError as e:
         logging.error(f"Config error: {e}")
         sys.exit(1)
+    profile.configure(conf)
 
     # Step 1 & 2: gather weather and calendar first (needed by welcome)
     weather = _safe(weather_block, conf, calendar_events=[])
@@ -54,11 +56,15 @@ def run(config_path: str = None, as_of=None):
     tweet     = _safe(tweet_block, as_of=as_of)
     nyt       = _safe(nyt_block, conf.get("nyt_api_key"))
 
-    # Step 7: welcome uses all available context to pick the best hook
+    # Step 7: orient the opening using the available day and task context.
+    # Only a real daily send reads and later updates the mention history.
+    real_send = as_of is None
+    history_file = opening_history.history_path(conf)
+    mention_history = opening_history.load(history_file) if real_send else {}
     welcome = _safe(welcome_block, conf["anthropic_api_key"],
                     weather_data=weather, calendar_events=calendar,
                     nyt_stories=nyt, photo=photo, messages=messages, tweet=tweet,
-                    reminders=reminders,
+                    reminders=reminders, mention_history=mention_history,
                     as_of=as_of)
 
     msg = render_email(
@@ -79,6 +85,14 @@ def run(config_path: str = None, as_of=None):
     success = send_email(msg, secret_path, token_path)
     if success:
         logging.info("NiederDaily sent successfully.")
+        if real_send and welcome:
+            from datetime import date as _today
+            # Match only the reminders the opening could see, so a held-back item's
+            # cooldown is not refreshed by an unrelated word.
+            shown = opening_history.filter_for_prompt(reminders, mention_history, _today.today())
+            mentioned = opening_history.mentioned_titles(welcome, shown)
+            if not opening_history.record(history_file, mentioned, _today.today()):
+                logging.warning("Could not update the opening mention history.")
     else:
         logging.error("Failed to send NiederDaily.")
 
@@ -117,6 +131,7 @@ def preflight():
     except cfg.ConfigError as e:
         print(f"✗ Config: {e}")
         sys.exit(1)
+    profile.configure(conf)
 
     # Calendar
     calendar_ready = calendar_access_granted(prompt=True)

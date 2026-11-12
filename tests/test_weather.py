@@ -438,3 +438,35 @@ def test_season_for_latitude_handles_both_hemispheres():
 
     assert _season_for_latitude(41.2512, date(2026, 4, 19)) == "spring"
     assert _season_for_latitude(-33.8688, date(2026, 4, 19)) == "autumn"
+
+
+def test_weather_block_confirms_travel_only_for_trips_and_skips_transit(requests_mock):
+    from modules import profile
+    profile.configure({"commute": {"transit_lines": ["Metro"]}})
+    requests_mock.get(
+        "https://weatherkit.apple.com/api/v1/weather/en/41.2512/-74.3607",
+        json=WEATHERKIT_RESPONSE,
+    )
+    requests_mock.get(
+        "https://weatherkit.apple.com/api/v1/weather/en/40.7128/-74.006",
+        json=WEATHERKIT_RESPONSE,
+    )
+    nominatim = requests_mock.get("https://nominatim.openstreetmap.org/search", json=NOMINATIM_RESPONSE)
+    config = {**WEATHERKIT_CONFIG, "weather_calendars": ["Trips"]}
+    with patch("modules.weather._make_jwt", return_value="tok"):
+        from modules.weather import weather_block
+        transit = [{"title": "Metro 500 Inbound", "location": "Springfield", "all_day": False,
+                    "start": "7:05am", "calendar": "Trips"}]
+        result = weather_block(config, calendar_events=transit)
+        assert result["travel_city"] is None and result["travel_confirmed"] is False
+        assert nominatim.call_count == 0  # timetable options are never geocoded
+
+        meeting = [{"title": "Meeting", "location": "New York, NY", "all_day": False,
+                    "start": "9:00am", "calendar": "trips"}]
+        result = weather_block(config, calendar_events=meeting)
+        assert result["travel_city"] == "New York" and result["travel_confirmed"] is False
+
+        trip = [{**meeting[0], "title": "Trip to the conference"}]
+        assert weather_block(config, calendar_events=trip)["travel_confirmed"] is True
+        held = [{**meeting[0], "title": "Flight hold"}]
+        assert weather_block(config, calendar_events=held)["travel_confirmed"] is False

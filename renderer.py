@@ -28,6 +28,7 @@ a{color:#121212;}
 .header{padding:44px 40px 24px;}
 .date-line{font-size:16px;font-weight:300;line-height:1.35;letter-spacing:-0.01em;color:#474a51;max-width:520px;margin-bottom:12px;}
 .logo{font-size:44px;font-weight:700;line-height:0.96;letter-spacing:-0.03em;color:#121212;margin-bottom:18px;}
+.welcome p{margin:0 0 12px;}.welcome p:last-child{margin-bottom:0;}
 .welcome{max-width:520px;font-size:18px;font-weight:300;line-height:1.38;color:#474a51;}
 .section{padding:0 40px 24px;}
 .section-rule{height:1px;background:#d6d0c6;margin:0 0 24px;}
@@ -485,7 +486,10 @@ def render_email(
 
     welcome_html = ""
     if welcome:
-        welcome_html = f'<div class="welcome">{_esc(welcome)}</div>'
+        paragraphs = [part.strip() for part in welcome.split("\n\n") if part.strip()]
+        welcome_html = '<div class="welcome">' + ''.join(
+            f'<p>{_esc(part)}</p>' for part in paragraphs
+        ) + '</div>'
 
     sections = []
     weather_icons: list = []

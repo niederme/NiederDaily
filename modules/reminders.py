@@ -4,6 +4,8 @@ from datetime import date, datetime, time, timedelta
 import logging
 import threading
 
+from modules import profile
+
 try:
     import EventKit
     from Foundation import NSDate, NSUndefinedDateComponent
@@ -14,6 +16,31 @@ except ImportError:  # pragma: no cover - exercised in integration environments
 
 
 log = logging.getLogger(__name__)
+
+
+def _normalized_title(title: str) -> str:
+    return " ".join(title.replace("’", "'").casefold().split())
+
+
+def _suppressed_titles() -> set:
+    """Configured routines kept in Apple Reminders but omitted from newsletter inputs."""
+    return {_normalized_title(t) for t in profile.get().get("reminders_suppressed_titles") or [] if t}
+
+
+def _newsletter_title(title: str, list_name: str | None) -> str:
+    """Clarify a terse title for the newsletter only; never rename or complete the source item.
+
+    Driven by the `reminder_title_overrides` config list of {title, list, newsletter_title}.
+    """
+    for rule in profile.get().get("reminder_title_overrides") or []:
+        if not isinstance(rule, dict) or not rule.get("title") or not rule.get("newsletter_title"):
+            continue
+        if _normalized_title(title) != _normalized_title(rule["title"]):
+            continue
+        if rule.get("list") and _normalized_title(list_name or "") != _normalized_title(rule["list"]):
+            continue
+        return rule["newsletter_title"]
+    return title
 
 
 def _event_store():
@@ -177,9 +204,10 @@ def reminders_block(lists: list | None = None, as_of: date | None = None) -> dic
         reminders = _fetch_reminders(store, predicate)
 
         overdue, today_items, upcoming = [], [], []
+        suppressed = _suppressed_titles()
         for reminder in reminders:
             title = (reminder.title() or "").strip()
-            if not title:
+            if not title or _normalized_title(title) in suppressed:
                 continue
             due_str = _due_date_string(reminder)
             if not due_str:
@@ -189,10 +217,11 @@ def reminders_block(lists: list | None = None, as_of: date | None = None) -> dic
             except ValueError:
                 continue
 
+            list_name = _list_name(reminder)
             item = {
-                "title": title,
+                "title": _newsletter_title(title, list_name),
                 "due": due_str,
-                "list": _list_name(reminder),
+                "list": list_name,
                 "identifier": _reminder_identifier(reminder),
                 "list_color": _list_color(reminder),
             }
