@@ -1,4 +1,4 @@
-from renderer import _weather_html
+from renderer import _weather_html, _weather_emoji
 
 BASE_LOC = {
     "location": "Warwick, NY",
@@ -9,74 +9,78 @@ BASE_LOC = {
     "sunrise": "6:52am",
     "sunset": "7:31pm",
     "alerts": [],
-    "sentence": "A partly cloudy afternoon with highs in the low 60s.",
+    "sentence": "A breezy spring afternoon under patchy clouds.",
 }
 
+
+def _html(loc=BASE_LOC):
+    html, icons = _weather_html({"locations": [loc]})
+    assert icons == []
+    return html
+
+
 def test_weather_html_shows_location():
-    html = _weather_html({"locations": [BASE_LOC]})
-    assert "Warwick, NY" in html
+    assert '<div class="weather-place">Warwick, NY</div>' in _html()
 
-def test_weather_html_shows_current_temp():
-    html = _weather_html({"locations": [BASE_LOC]})
-    assert "54°" in html
 
-def test_weather_html_shows_high_low_in_metadata():
-    html = _weather_html({"locations": [BASE_LOC]})
-    assert "High 61°" in html
-    assert "Low 44°" in html
+def test_weather_html_compact_line_order():
+    html = _html()
+    line = html[html.index('class="weather-line"'):]
+    assert line.index("⛅") < line.index("54°") < line.index("(44°/61°)") < line.index("A breezy spring")
+
 
 def test_weather_html_shows_sentence():
-    html = _weather_html({"locations": [BASE_LOC]})
-    assert "A partly cloudy afternoon" in html
-    assert 'weather-summary' in html
+    assert '<span class="weather-summary">A breezy spring afternoon under patchy clouds.</span>' in _html()
 
-def test_weather_html_omits_sentence_div_when_empty():
-    loc = {**BASE_LOC, "sentence": ""}
-    html = _weather_html({"locations": [loc]})
-    assert "weather-summary" not in html
 
-def test_weather_html_shows_sunrise_sunset():
-    html = _weather_html({"locations": [BASE_LOC]})
-    assert "6:52am" in html
-    assert "7:31pm" in html
+def test_weather_html_omits_sentence_when_empty():
+    assert "weather-summary" not in _html({**BASE_LOC, "sentence": ""})
+
+
+def test_weather_html_drops_card_sunrise_and_inline_attribution():
+    html = _html()
+    assert "weather-card" not in html
+    assert "Sunrise" not in html
+    assert "legal-attribution" not in html
+
 
 def test_weather_html_no_rule_or_label():
-    """section-rule div and section label must not appear — show_rule=False, label=None."""
-    html = _weather_html({"locations": [BASE_LOC]})
+    html = _html()
     assert "section-rule" not in html
-    assert "WEATHER ·" not in html
+    assert "Weather</div>" not in html
+
 
 def test_weather_html_no_alert_when_empty():
-    html = _weather_html({"locations": [BASE_LOC]})
-    assert "⚠" not in html
+    assert "⚠" not in _html()
 
-def test_weather_html_shows_alert_banner():
-    loc = {**BASE_LOC, "alerts": [{
-        "event": "Flood Watch",
-        "expires": "Thu 6:00pm",
-        "agency": "NWS Chicago",
-        "url": "https://alerts.weather.gov/example",
-    }]}
-    html = _weather_html({"locations": [loc]})
-    assert "⚠" in html
-    assert "Flood Watch" in html
-    assert "alerts.weather.gov" in html
-    assert "Thu 6:00pm" in html
-    assert "NWS Chicago" in html
 
-def test_weather_html_alert_uses_inline_styles_not_class():
-    """Alert banner has no CSS class — uses inline styles (email client compatibility)."""
+def test_weather_html_shows_alert_line_with_inline_styles():
     loc = {**BASE_LOC, "alerts": [{
-        "event": "Winter Storm Warning",
-        "expires": "Fri 9:00am",
+        "event": "Wind Advisory",
+        "expires": "Sat 6:00pm",
         "agency": "NWS",
         "url": "https://alerts.weather.gov/example",
     }]}
-    html = _weather_html({"locations": [loc]})
-    assert 'style=' in html
-    assert 'class="alert' not in html
+    html = _html(loc)
+    assert "Wind Advisory until Sat 6:00pm" in html
+    assert "alerts.weather.gov" in html
+    assert "color:#d93025" in html
 
-def test_weather_html_shows_attribution():
-    html = _weather_html({"locations": [BASE_LOC]})
-    assert "weatherkit.apple.com/legal-attribution.html" in html
-    assert ">Weather<" in html
+
+def test_weather_html_renders_each_location():
+    travel = {**BASE_LOC, "location": "Chicago", "condition": "Windy", "temp": 48}
+    html, _ = _weather_html({"locations": [BASE_LOC, travel]})
+    assert html.count('class="weather-loc"') == 2
+    assert "Chicago" in html and "\U0001f4a8" in html
+
+
+def test_weather_emoji_mapping():
+    assert _weather_emoji("Clear") == "☀️"
+    assert _weather_emoji("Mostly Clear") == "\U0001f324️"
+    assert _weather_emoji("Mostly Cloudy") == "\U0001f325️"
+    assert _weather_emoji("Cloudy") == "☁️"
+    assert _weather_emoji("Sun Showers") == "\U0001f326️"
+    assert _weather_emoji("Heavy Rain") == "\U0001f327️"
+    assert _weather_emoji("Scattered Thunderstorms") == "⛈️"
+    assert _weather_emoji("Freezing Rain") == "\U0001f9ca"
+    assert _weather_emoji("Unknown") == "\U0001f321️"

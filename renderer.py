@@ -32,13 +32,12 @@ a{color:#121212;}
 .welcome{max-width:520px;font-size:18px;font-weight:300;line-height:1.38;color:#474a51;}
 .section{padding:0 40px 24px;}
 .section-rule{height:1px;background:#d6d0c6;margin:0 0 24px;}
-.module-place{font-size:20px;font-weight:700;line-height:1.15;letter-spacing:-0.02em;color:#121212;margin-bottom:12px;}
-.weather-card{padding:20px 22px 18px;border:1px solid rgba(214,208,198,0.9);border-radius:18px;background:#ffffff;}
-.display-line{font-size:58px;font-weight:300;line-height:0.94;letter-spacing:-0.03em;color:#121212;display:flex;align-items:center;gap:18px;flex-wrap:wrap;}
-.weather-icon{display:inline-block;width:56px;height:56px;vertical-align:middle;flex-shrink:0;line-height:0;}
-.weather-icon svg{width:56px;height:56px;}
-.weather-summary{font-size:14px;line-height:1.45;color:#474a51;margin-top:8px;}
-.weather-meta{font-size:12px;line-height:1.45;color:#6d7178;margin-top:4px;}
+.weather-loc{margin:0 0 14px;}.weather-loc:last-child{margin-bottom:0;}
+.weather-place{font-size:16px;font-weight:700;line-height:1.3;letter-spacing:-0.01em;color:#121212;margin-bottom:4px;}
+.weather-line{font-size:16px;line-height:1.45;color:#121212;}
+.weather-temp{font-weight:600;}
+.weather-range{color:#6d7178;}
+.weather-summary{color:#474a51;}
 .supporting{font-size:13px;line-height:1.45;color:#474a51;margin-top:8px;}
 .list-row{display:flex;gap:18px;align-items:baseline;padding:0 0 11px;margin:0 0 11px;border-bottom:1px solid rgba(214,208,198,0.55);}
 .list-row:last-child{padding-bottom:0;margin-bottom:0;border-bottom:0;}
@@ -52,6 +51,8 @@ a{color:#121212;}
 .meta-sep{color:#9aa0a6;margin:0 6px;}
 .calendar-source{display:inline-flex;align-items:center;gap:6px;color:#6d7178;white-space:nowrap;}
 .calendar-dot{display:inline-block;width:8px;height:8px;border-radius:999px;flex-shrink:0;}
+.calendar-line{display:flex;font-size:12px;line-height:1.4;margin-bottom:3px;}
+.calendar-title{display:block;font-weight:600;}
 .msg-summary{max-width:520px;font-size:16px;line-height:1.55;color:#474a51;}
 .nyt{display:flex;gap:20px;align-items:flex-start;padding:0 0 16px;margin:0 0 16px;border-bottom:1px solid rgba(214,208,198,0.55);}
 .nyt:last-child{padding-bottom:0;margin-bottom:0;border-bottom:0;}
@@ -85,16 +86,11 @@ a{color:#121212;}
   .logo{font-size:36px !important;margin-bottom:12px !important;}
   .welcome{font-size:16px !important;line-height:1.45 !important;}
   .section-rule{margin-bottom:18px !important;}
-  .module-place{font-size:18px !important;margin-bottom:10px !important;}
-  .weather-card{padding:14px 14px 12px !important;border-radius:16px !important;}
-  .display-line{font-size:42px !important;gap:12px !important;}
-  .weather-icon{width:60px !important;height:60px !important;}
-  .weather-icon svg{width:40px !important;height:40px !important;}
-  .weather-summary{font-size:13px !important;line-height:1.4 !important;}
-  .weather-meta{font-size:11px !important;}
   .list-row{display:block !important;padding-bottom:12px !important;margin-bottom:12px !important;}
   .item-row-link{display:block !important;}
-  .list-time{display:block !important;min-width:0 !important;margin-bottom:4px !important;}
+  .list-time{min-width:62px !important;flex-shrink:0;}
+  .weather-place{font-size:15px !important;}
+  .weather-line{font-size:15px !important;}
   .list-main{font-size:14px !important;}
   .list-meta{font-size:11px !important;line-height:1.45 !important;}
   .calendar-source{white-space:normal !important;}
@@ -141,139 +137,81 @@ def _row_link(item_type: str, time_html: str, main_html: str, payload: dict) -> 
     return f'<a class="item-row-link" href="{_esc(href)}">{time_html}{main_html}</a>'
 
 
-def _render_sf_symbol(name: str, hex_color: str, size: int = 56) -> bytes | None:
-    """Render SF Symbol as PNG bytes (for CID attachment)."""
-    try:
-        from AppKit import (NSImage, NSImageSymbolConfiguration, NSColor,
-                            NSBitmapImageRep, NSGraphicsContext)
-        from Foundation import NSMakeRect, NSMakeSize
-        r = int(hex_color[1:3], 16) / 255
-        g = int(hex_color[3:5], 16) / 255
-        b = int(hex_color[5:7], 16) / 255
-        color = NSColor.colorWithSRGBRed_green_blue_alpha_(r, g, b, 1.0)
-        cfg = NSImageSymbolConfiguration.configurationWithPaletteColors_([color, color, color])
-        img = NSImage.imageWithSystemSymbolName_accessibilityDescription_(name, None)
-        if img is None:
-            return None
-        img = img.imageWithSymbolConfiguration_(cfg)
-        img.setSize_(NSMakeSize(size, size))
-        px = size * 2
-        bmp = NSBitmapImageRep.alloc().initWithBitmapDataPlanes_pixelsWide_pixelsHigh_bitsPerSample_samplesPerPixel_hasAlpha_isPlanar_colorSpaceName_bytesPerRow_bitsPerPixel_(
-            None, px, px, 8, 4, True, False, "NSCalibratedRGBColorSpace", 0, 0)
-        ctx = NSGraphicsContext.graphicsContextWithBitmapImageRep_(bmp)
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.setCurrentContext_(ctx)
-        img.drawInRect_(NSMakeRect(0, 0, px, px))
-        NSGraphicsContext.restoreGraphicsState()
-        png_data = bmp.representationUsingType_properties_(4, None)
-        return bytes(png_data)
-    except Exception:
-        return None
-
-
-# Maps condition label (lowercased keyword) → (sf_symbol_name, hex_color)
-_SF_SYMBOL_MAP = [
-    ("thunder",         "cloud.bolt.rain.fill",     ACCENT),
-    ("blizzard",        "wind.snow",                MUTED),
-    ("snow",            "cloud.snow.fill",           MUTED),
-    ("flurr",           "cloud.snow.fill",           MUTED),
-    ("sleet",           "cloud.sleet.fill",          MUTED),
-    ("wintry",          "cloud.sleet.fill",          MUTED),
-    ("freezing",        "cloud.sleet.fill",          MUTED),
-    ("hail",            "cloud.hail.fill",           MUTED),
-    ("heavy rain",      "cloud.heavyrain.fill",      ACCENT),
-    ("rain",            "cloud.rain.fill",           ACCENT),
-    ("drizzle",         "cloud.drizzle.fill",        ACCENT),
-    ("shower",          "cloud.sun.rain.fill",       ACCENT),
-    ("fog",             "cloud.fog.fill",            MUTED),
-    ("haz",             "sun.haze.fill",             MUTED),
-    ("smok",            "smoke.fill",                MUTED),
-    ("dust",            "sun.dust.fill",             MUTED),
-    ("wind",            "wind",                      MUTED),
-    ("breezy",          "wind",                      MUTED),
-    ("mostly clear",    "sun.max.fill",              ACCENT),
-    ("clear",           "sun.max.fill",              ACCENT),
-    ("sun shower",      "cloud.sun.rain.fill",       ACCENT),
-    ("sun",             "sun.max.fill",              ACCENT),
-    ("partly",          "cloud.sun.fill",            MUTED),
-    ("mostly cloudy",   "cloud.fill",                MUTED),
-    ("cloudy",          "cloud.fill",                MUTED),
-    ("frigid",          "thermometer.snowflake",     MUTED),
-    ("hot",             "thermometer.sun.fill",      ACCENT),
-    ("hurricane",       "hurricane",                 ACCENT),
-    ("tropical",        "tropicalstorm",             ACCENT),
+# Maps condition label (lowercased keyword) -> emoji. First match wins, so
+# specific conditions come before general ones ("sun shower" before "rain").
+_WEATHER_EMOJI = [
+    ("thunder",       "\u26c8\ufe0f"),        # ⛈️
+    ("strong storm",  "\u26c8\ufe0f"),        # ⛈️
+    ("hurricane",     "\U0001f300"),           # 🌀
+    ("tropical",      "\U0001f300"),           # 🌀
+    ("blizzard",      "\U0001f328\ufe0f"),    # 🌨️
+    ("snow",          "\U0001f328\ufe0f"),    # 🌨️
+    ("flurr",         "\U0001f328\ufe0f"),    # 🌨️
+    ("sleet",         "\U0001f328\ufe0f"),    # 🌨️
+    ("wintry",        "\U0001f328\ufe0f"),    # 🌨️
+    ("freezing",      "\U0001f9ca"),           # 🧊
+    ("hail",          "\U0001f9ca"),           # 🧊
+    ("sun shower",    "\U0001f326\ufe0f"),    # 🌦️
+    ("rain",          "\U0001f327\ufe0f"),    # 🌧️
+    ("drizzle",       "\U0001f327\ufe0f"),    # 🌧️
+    ("fog",           "\U0001f32b\ufe0f"),    # 🌫️
+    ("haz",           "\U0001f32b\ufe0f"),    # 🌫️
+    ("smok",          "\U0001f32b\ufe0f"),    # 🌫️
+    ("dust",          "\U0001f32b\ufe0f"),    # 🌫️
+    ("wind",          "\U0001f4a8"),           # 💨
+    ("breezy",        "\U0001f4a8"),           # 💨
+    ("frigid",        "\U0001f976"),           # 🥶
+    ("hot",           "\U0001f975"),           # 🥵
+    ("mostly clear",  "\U0001f324\ufe0f"),    # 🌤️
+    ("clear",         "\u2600\ufe0f"),        # ☀️
+    ("partly",        "\u26c5"),               # ⛅
+    ("mostly cloudy", "\U0001f325\ufe0f"),    # 🌥️
+    ("cloudy",        "\u2601\ufe0f"),        # ☁️
 ]
+_DEFAULT_WEATHER_EMOJI = "\U0001f321\ufe0f"   # 🌡️
 
 
-def _weather_icon(condition: str, icon_registry: dict) -> str:
-    """Returns icon HTML. Renders SF Symbol as CID attachment; registers in icon_registry."""
-    c = condition.lower()
-    for keyword, symbol, color in _SF_SYMBOL_MAP:
+def _weather_emoji(condition: str) -> str:
+    c = (condition or "").lower()
+    for keyword, emoji in _WEATHER_EMOJI:
         if keyword in c:
-            if symbol not in icon_registry:
-                png_bytes = _render_sf_symbol(symbol, color)
-                if png_bytes:
-                    cid = f"wicon-{symbol.replace('.', '-').replace(' ', '-')}"
-                    icon_registry[symbol] = (cid, png_bytes)
-            if symbol in icon_registry:
-                cid, _ = icon_registry[symbol]
-                return (
-                    f'<span class="weather-icon" aria-hidden="true">'
-                    f'<img src="cid:{cid}" width="56" height="56" alt=""'
-                    f' style="display:inline-block;vertical-align:middle;">'
-                    f'</span>'
-                )
-            break
-    # fallback: plain cloud SVG
-    return (
-        f'<span class="weather-icon" aria-hidden="true">'
-        f'<svg width="56" height="56" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">'
-        f'<path d="M10 14.5C10 10.9101 12.9101 8 16.5 8C19.2451 8 21.5927 9.70662 22.5287 12.1172C22.8455 12.0398 23.1765 12 23.5167 12C25.9921 12 28 14.0079 28 16.4833C28 18.9588 25.9921 20.9667 23.5167 20.9667H12.5C9.46243 20.9667 7 18.5042 7 15.4667C7 12.4291 9.46243 9.96667 12.5 9.96667" stroke="{MUTED}" stroke-width="1.8" stroke-linecap="round"/>'
-        f'</svg></span>'
-    )
+            return emoji
+    return _DEFAULT_WEATHER_EMOJI
 
 
 def _weather_html(data: dict) -> tuple[str, list]:
-    """Returns (html, icon_attachments) where icon_attachments is [(cid, png_bytes), ...]."""
-    parts = []
-    icon_registry: dict = {}  # symbol_name -> (cid, png_bytes)
+    """Compact weather: place name, then one line of
+    emoji, current temp, (low/high) and a short blurb.
+
+    Returns (html, icon_attachments); emoji need no attachments, so the list
+    is always empty. Kept as a tuple so render_email's contract is unchanged.
+    """
+    rows = []
     for loc in data["locations"]:
         sentence_html = ""
         if loc.get("sentence"):
-            sentence_html = f'<div class="weather-summary">{_esc(loc["sentence"])}</div>'
+            sentence_html = f' <span class="weather-summary">{_esc(loc["sentence"])}</span>'
 
         alert_html = ""
         for alert in loc.get("alerts", []):
             alert_html += (
-                f'<div style="margin-top:10px;padding:8px 0;border-top:1px solid rgba(214,208,198,0.6);">'
-                f'<div style="font-size:12px;font-weight:600;color:#ff453a;">'
-                f'⚠ <a href="{_esc(alert["url"])}" style="color:#ff453a;text-decoration:none;">'
-                f'{_esc(alert["event"])} →</a></div>'
-                f'<div style="font-size:11px;color:{MUTED};margin-top:2px;">'
-                f'Until {_esc(alert["expires"])} · {_esc(alert["agency"])}</div>'
-                f'</div>'
+                f'<div style="font-size:13px;line-height:1.45;font-weight:600;color:#d93025;margin-top:4px;">'
+                f'\u26a0 <a href="{_esc(alert["url"])}" style="color:#d93025;text-decoration:none;">'
+                f'{_esc(alert["event"])} until {_esc(alert["expires"])} \u2192</a></div>'
             )
 
-        attribution_html = (
-            f'<div style="font-size:10px;color:#9aa0a6;margin-top:8px;">'
-            f'<a href="https://weatherkit.apple.com/legal-attribution.html" '
-            f'style="color:#9aa0a6;text-decoration:none;">Weather</a></div>'
-        )
-
-        body = (
-            f'<div class="weather-card">'
-            f'<div class="module-place">{_esc(loc["location"])}</div>'
-            f'<div class="display-line">'
-            f'{_weather_icon(loc["condition"], icon_registry)}'
-            f'<span>{loc["high"]}° / {loc["low"]}°</span></div>'
-            f'{sentence_html}'
-            f'<div class="weather-meta">Currently {loc["temp"]}° · Sunrise {_esc(loc["sunrise"])} · Sunset {_esc(loc["sunset"])}</div>'
+        rows.append(
+            f'<div class="weather-loc">'
+            f'<div class="weather-place">{_esc(loc["location"])}</div>'
+            f'<div class="weather-line">'
+            f'<span class="weather-emoji" aria-hidden="true">{_weather_emoji(loc.get("condition", ""))}</span> '
+            f'<span class="weather-temp">{loc["temp"]}\u00b0</span> '
+            f'<span class="weather-range">({loc["low"]}\u00b0/{loc["high"]}\u00b0)</span>'
+            f'{sentence_html}</div>'
             f'{alert_html}'
-            f'{attribution_html}'
             f'</div>'
         )
-        parts.append(_section(None, body, show_rule=False))
-    return "".join(parts), list(icon_registry.values())
+    return _section(None, "".join(rows), show_rule=False), []
 
 
 def _calendar_html(events: list, *, show_rule: bool = True) -> str:
@@ -282,18 +220,15 @@ def _calendar_html(events: list, *, show_rule: bool = True) -> str:
     rows = []
     for e in events:
         time_str = _esc(e.get("time") or "All day")
-        meta_parts = []
-        if e.get("location"):
-            meta_parts.append(_esc(e["location"]))
+        source = ""
         if e.get("calendar"):
             dot = ""
             if e.get("calendar_color"):
                 dot = f'<span class="calendar-dot" style="background:{_esc(e["calendar_color"])};"></span>'
-            meta_parts.append(f'<span class="calendar-source">{dot}{_esc(e["calendar"])}</span>')
+            source = f'<span class="calendar-source calendar-line">{dot}{_esc(e["calendar"])}</span>'
         loc = ""
-        if meta_parts:
-            meta_sep = '<span class="meta-sep">·</span>'
-            loc = f'<span class="list-meta">{meta_sep.join(meta_parts)}</span>'
+        if e.get("location"):
+            loc = f'<span class="list-meta">{_esc(e["location"])}</span>'
         payload = {
             "identifier": e.get("identifier"),
             "date": date.today().isoformat(),
@@ -303,7 +238,10 @@ def _calendar_html(events: list, *, show_rule: bool = True) -> str:
             "title": e["title"],
         }
         time_html = f'<span class="list-time">{time_str}</span>'
-        main_html = f'<span class="list-main">{_esc(e["title"])}{loc}</span>'
+        main_html = (
+            f'<span class="list-main">{source}'
+            f'<span class="calendar-title">{_esc(e["title"])}</span>{loc}</span>'
+        )
         rows.append(
             f'<div class="list-row">'
             f'{_row_link("calendar", time_html, main_html, payload)}</div>'
@@ -493,7 +431,9 @@ def render_email(
 
     sections = []
     weather_icons: list = []
-    next_section_rule = weather is None
+    # The compact weather block has no card border, so a rule always separates
+    # it from the next section.
+    next_section_rule = True
     if weather:
         weather_html_str, weather_icons = _weather_html(weather)
         sections.append(weather_html_str)
@@ -525,7 +465,7 @@ def render_email(
     {welcome_html}
   </div>
   {"".join(sections)}
-  <div class="footer">NiederDaily · <a href="mailto:{recipient}">{recipient}</a> · Every morning at 5:55am</div>
+  <div class="footer">NiederDaily · <a href="mailto:{recipient}">{recipient}</a> · Every morning at 5:55am{" · Weather data from <a href='https://weatherkit.apple.com/legal-attribution.html'>Apple Weather</a>" if weather else ""}</div>
 </div>
 </div>
 </body></html>"""

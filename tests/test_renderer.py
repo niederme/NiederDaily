@@ -37,31 +37,31 @@ def test_render_subject_includes_date():
         weather=None, calendar=None, reminders=None, messages=None, photo=None, nyt=None)
     assert date.today().strftime("%Y") in msg["Subject"]
 
-def test_render_includes_weather_icon():
+def test_render_includes_compact_weather():
     msg = render_email(
         recipient="me@example.com", welcome=None,
         weather=WEATHER, calendar=None, reminders=None, messages=None, photo=None, nyt=None
     )
     html = _html_from_message(msg)
-    assert 'class="weather-icon"' in html
-    assert 'class="weather-card"' in html
+    assert 'class="weather-line"' in html
     assert 'class="weather-summary"' in html
-    assert 'class="weather-meta"' in html
-    assert "<svg" in html
+    assert "weather-card" not in html
+    assert "<svg" not in html
     assert "54°" in html
-    assert "61° / 44°" in html
+    assert "(44°/61°)" in html
     assert "Overcast today, with gusts up to 28 mph this afternoon." in html
-    assert "Sunrise 6:52am" in html
+    assert "Sunrise" not in html
+    assert "weatherkit.apple.com/legal-attribution.html" in html  # footer credit
 
 
-def test_render_omits_rule_between_weather_card_and_next_section():
+def test_render_rule_separates_compact_weather_from_next_section():
     msg = render_email(
         recipient="me@example.com", welcome=None,
         weather=WEATHER, calendar=CALENDAR, reminders=None, messages=None, photo=None, nyt=None
     )
     html = _html_from_message(msg)
-    assert html.count('class="section-rule"') == 0
-    assert "Calendar" in html
+    assert html.count('class="section-rule"') == 1
+    assert html.index("weather-line") < html.index('class="section-rule"') < html.index("Calendar")
     assert "Personal" in html
     assert "#0088FF" in html
 
@@ -238,3 +238,18 @@ def test_render_welcome_paragraphs_become_separate_p_tags():
                        photo=None, nyt=None)
     html = _html_from_message(msg)
     assert '<div class="welcome"><p>City day today.</p><p>The game is on at 7.</p></div>' in html
+
+
+def test_calendar_row_puts_calendar_first_then_title_then_location():
+    msg = render_email(recipient="me@example.com", welcome=None,
+        weather=None, calendar=CALENDAR, reminders=None, messages=None, photo=None, nyt=None)
+    html = _html_from_message(msg)
+    row = html[html.index('class="list-time"'):]
+    assert row.index("Personal") < row.index('class="calendar-title">Weekly sync') < row.index("Zoom")
+    assert 'meta-sep' not in row.split("</div>")[0]
+
+
+def test_footer_omits_weather_credit_without_weather():
+    msg = render_email(recipient="me@example.com", welcome=None,
+        weather=None, calendar=None, reminders=None, messages=None, photo=None, nyt=None)
+    assert "legal-attribution" not in _html_from_message(msg)
