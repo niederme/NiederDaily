@@ -246,3 +246,25 @@ def test_calendar_list_events_without_hidden_calendars_keeps_other_events():
 
     assert [e["title"] for e in calendar.calendar_list_events(events)] == ["Travel to Buffalo"]
     assert calendar.calendar_list_events(None) is None
+
+
+def test_events_on_two_calendars_show_once_preferring_own_calendar_with_location():
+    from modules import profile
+    profile.configure({"own_calendars": ["Family"]})
+    events = [
+        {"time": "1:00pm", "title": "Bills at Jets", "calendar": "Bills", "location": "Stadium", "all_day": False},
+        {"time": "1:00pm", "title": "Bills at Jets", "calendar": "Family", "location": "Stadium", "all_day": False},
+        {"time": "1:00pm", "title": "Lunch", "calendar": "Family", "location": "", "all_day": False},
+        {"time": None, "title": "Convention", "calendar": "Family", "location": "", "all_day": True},
+        {"time": None, "title": "Convention ", "calendar": "Family", "location": "Hotel", "all_day": True},
+        {"time": "5:00pm", "title": "Convention", "calendar": "Family", "location": "", "all_day": False},
+    ]
+
+    shown = calendar.calendar_list_events(events)
+
+    assert [(e["title"].strip(), e["calendar"], e["location"]) for e in shown] == [
+        ("Bills at Jets", "Family", "Stadium"),
+        ("Lunch", "Family", ""),
+        ("Convention", "Family", "Hotel"),
+        ("Convention", "Family", ""),  # a timed event is not the all-day one
+    ]

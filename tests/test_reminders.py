@@ -210,3 +210,26 @@ def test_title_override_preserves_source_and_due_buckets(mocker):
         assert item.title() == "Check filter!"
         assert not any(call[0].startswith("set") for call in item.mock_calls)
     assert not any(call[0].startswith(("save", "remove", "commit")) for call in store.mock_calls)
+
+
+def test_duplicate_reminders_show_once_per_bucket(mocker):
+    today = date(2026, 11, 9)
+    items = [_make_reminder("Check filter!", today - timedelta(days=5)),
+             _make_reminder("  CHECK   FILTER! ", today - timedelta(days=2)),
+             _make_reminder("Check filter!", today + timedelta(days=2)),
+             _make_reminder("Buy coffee", today - timedelta(days=1))]
+    for item in items:
+        item.calendar.return_value.title.return_value = "Home"
+    mocker.patch.object(reminders, "EventKit", types.SimpleNamespace(EKEntityTypeReminder=1))
+    mocker.patch.object(reminders, "_event_store", return_value=MagicMock())
+    mocker.patch.object(reminders, "_has_reminders_access", return_value=True)
+    mocker.patch.object(reminders, "_selected_lists", return_value=["Home"])
+    mocker.patch.object(reminders, "_nsdate_for_local", side_effect=lambda dt: dt)
+    mocker.patch.object(reminders, "_fetch_reminders", return_value=items)
+
+    result = reminders.reminders_block(["Home"], as_of=today)
+
+    assert [(i["title"], i["due"]) for i in result["overdue"]] == [
+        ("Check filter!", (today - timedelta(days=5)).isoformat()),
+        ("Buy coffee", (today - timedelta(days=1)).isoformat())]
+    assert [i["title"] for i in result["upcoming"]] == ["Check filter!"]

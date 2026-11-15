@@ -496,3 +496,31 @@ def test_schedule_recital_and_waiting_nag_rejected():
     assert validate_opening(recital, calendar_events=EVENTS) is None
     assert validate_opening("Standup at 9:15 sets the tone.", calendar_events=EVENTS) is not None
     assert validate_opening("The gutter check is overdue and waiting for attention.", calendar_events=EVENTS) is None
+
+
+@pytest.mark.parametrize("text", [
+    "The kids' evening means the usual shuttling around.",
+    "A shuttle run to practice after dinner.",
+])
+def test_shuttling_counts_as_commute_talk(text):
+    assert validate_opening(text, calendar_events=EVENTS) is None
+
+
+@pytest.mark.parametrize("text", [
+    "Since your location is unknown, check the Packages section.",
+    "Your location isn't clear today, so plan loosely.",
+    "With an unknown location, keep the evening open.",
+    "It's not clear where you'll be this afternoon.",
+])
+def test_unknown_location_is_never_echoed(text):
+    assert validate_opening(text, calendar_events=EVENTS) is None
+
+
+def test_ordinary_location_words_still_allowed():
+    text = "The play's location is the elementary school, so it's close by."
+    assert validate_opening(text, calendar_events=EVENTS) == text
+
+
+def test_prompt_tells_model_not_to_echo_unknown_location(mocker):
+    call, _ = _prompt_for(mocker, calendar_events=EVENTS)
+    assert "never say that the location is unknown" in call["system"]
