@@ -14,8 +14,6 @@ MUTED = "#474a51"
 LINE = "#d6d0c6"
 SHORTCUT_NAME = "Open NiederDaily Item"
 
-BADGE_OVERDUE = f'<span style="display:inline-block;min-width:56px;color:{ACCENT};font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Overdue</span>'
-BADGE_TODAY = f'<span style="display:inline-block;min-width:56px;color:{ACCENT};font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Today</span>'
 BADGE_REPLY = f'<span style="display:inline-block;color:{ACCENT};font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Needs reply</span>'
 
 SECTION_LABEL_STYLE = f"font-size:16px;font-weight:700;letter-spacing:-0.01em;color:{INK};margin-bottom:14px;"
@@ -53,6 +51,14 @@ a{color:#121212;}
 .calendar-dot{display:inline-block;width:8px;height:8px;border-radius:999px;flex-shrink:0;}
 .calendar-line{display:flex;font-size:12px;line-height:1.4;margin-bottom:3px;}
 .calendar-title{display:block;font-weight:600;}
+.reminder-group{margin:0 0 18px;}.reminder-group:last-child{margin-bottom:0;}
+.reminder-list{font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#6d7178;margin:0 0 8px;}
+.reminder-row{display:flex;align-items:center;gap:10px;padding:0 0 9px;margin:0 0 9px;border-bottom:1px solid rgba(214,208,198,0.55);}
+.reminder-row:last-child{padding-bottom:0;margin-bottom:0;border-bottom:0;}
+.reminder-check{display:inline-block;width:14px;height:14px;border:2px solid #6d7178;border-radius:999px;box-sizing:border-box;flex-shrink:0;}
+.reminder-title{flex:1;font-size:15px;line-height:1.35;color:#121212;}
+.reminder-status{font-size:12px;color:#6d7178;white-space:nowrap;}
+.reminder-overdue{color:#ff453a;font-weight:600;}
 .msg-summary{max-width:520px;font-size:16px;line-height:1.55;color:#474a51;}
 .nyt{display:flex;gap:20px;align-items:flex-start;padding:0 0 16px;margin:0 0 16px;border-bottom:1px solid rgba(214,208,198,0.55);}
 .nyt:last-child{padding-bottom:0;margin-bottom:0;border-bottom:0;}
@@ -265,29 +271,14 @@ def _reminder_group_key(list_name: str | None) -> tuple:
 
 
 def _reminders_html(data: dict, *, show_rule: bool = True) -> str:
-    def reminder_meta(item: dict) -> str:
-        if not item.get("list"):
-            return ""
-        dot = ""
-        if item.get("list_color"):
-            dot = f'<span class="calendar-dot" style="background:{_esc(item["list_color"])};"></span>'
-        return f'<span class="calendar-source calendar-line">{dot}{_esc(item["list"])}</span>'
-
-    def reminder_main(item: dict) -> str:
-        # List pill first (beside the badge), then the bold title, like calendar rows.
-        return f'<span class="list-main">{reminder_meta(item)}<span class="calendar-title">{_esc(item["title"])}</span></span>'
-
-    rows = []
+    """Reminders grouped by list: a caps list heading, then one row per
+    reminder with a hollow circle in the list color, the title, and a
+    right-aligned status (Overdue in red, Today, or the weekday)."""
+    items = []  # (list_name, list_color, title, status_html, payload)
     for r in data.get("overdue", []):
-        payload = {"identifier": r.get("identifier"), "due": r.get("due"), "list": r.get("list"), "title": r["title"]}
-        time_html = f'<span class="list-time">{BADGE_OVERDUE}</span>'
-        main_html = reminder_main(r)
-        rows.append((r.get("list"), f'<div class="list-row">{_row_link("reminder", time_html, main_html, payload)}</div>'))
+        items.append((r, '<span class="reminder-status reminder-overdue">Overdue</span>'))
     for r in data.get("today", []):
-        payload = {"identifier": r.get("identifier"), "due": r.get("due"), "list": r.get("list"), "title": r["title"]}
-        time_html = f'<span class="list-time">{BADGE_TODAY}</span>'
-        main_html = reminder_main(r)
-        rows.append((r.get("list"), f'<div class="list-row">{_row_link("reminder", time_html, main_html, payload)}</div>'))
+        items.append((r, '<span class="reminder-status">Today</span>'))
     next_day = None
     for r in data.get("upcoming", []):
         due_raw = r.get("due")
@@ -297,19 +288,35 @@ def _reminders_html(data: dict, *, show_rule: bool = True) -> str:
             break
         try:
             from datetime import datetime
-            due = datetime.strptime(due_raw, "%Y-%m-%d").strftime("%a %-d")
+            due = datetime.strptime(due_raw, "%Y-%m-%d").strftime("%a")
         except Exception:
-            due = due_raw
-        badge = f'<span style="display:inline-block;min-width:56px;color:{MUTED};font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">{due}</span>'
-        payload = {"identifier": r.get("identifier"), "due": r.get("due"), "list": r.get("list"), "title": r["title"]}
-        time_html = f'<span class="list-time">{badge}</span>'
-        main_html = reminder_main(r)
-        rows.append((r.get("list"), f'<div class="list-row">{_row_link("reminder", time_html, main_html, payload)}</div>'))
-    if not rows:
+            due = due_raw or ""
+        items.append((r, f'<span class="reminder-status">{_esc(due)}</span>'))
+    if not items:
         return _section("Reminders", '<div class="supporting">All clear.</div>', show_rule=show_rule)
+
     # Stable sort keeps overdue -> today -> upcoming order within each list.
-    rows.sort(key=lambda row: _reminder_group_key(row[0]))
-    return _section("Reminders", "".join(html for _, html in rows), show_rule=show_rule)
+    items.sort(key=lambda item: _reminder_group_key(item[0].get("list")))
+    groups: list[tuple[str, list[str]]] = []
+    for r, status_html in items:
+        list_name = (r.get("list") or "").strip()
+        color = r.get("list_color") or MUTED
+        payload = {"identifier": r.get("identifier"), "due": r.get("due"), "list": r.get("list"), "title": r["title"]}
+        row = (
+            f'<div class="reminder-row">'
+            f'<span class="reminder-check" style="border-color:{_esc(color)};"></span>'
+            f'<span class="reminder-title">{_linked_text("reminder", r["title"], payload)}</span>'
+            f'{status_html}</div>'
+        )
+        if not groups or groups[-1][0] != list_name:
+            groups.append((list_name, []))
+        groups[-1][1].append(row)
+
+    parts = []
+    for list_name, rows in groups:
+        heading = f'<div class="reminder-list">{_esc(list_name)}</div>' if list_name else ""
+        parts.append(f'<div class="reminder-group">{heading}{"".join(rows)}</div>')
+    return _section("Reminders", "".join(parts), show_rule=show_rule)
 
 
 def _nyt_html(stories: list, *, show_rule: bool = True) -> str:
