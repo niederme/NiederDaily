@@ -524,3 +524,37 @@ def test_ordinary_location_words_still_allowed():
 def test_prompt_tells_model_not_to_echo_unknown_location(mocker):
     call, _ = _prompt_for(mocker, calendar_events=EVENTS)
     assert "never say that the location is unknown" in call["system"]
+
+
+INVENTED_REMINDERS = {"today": [{"title": "ask Dr. Doshi for more Vyvanse", "due": "2026-11-16", "list": "Home"}],
+                      "overdue": [{"title": "Check Salt", "due": "2026-11-13", "list": "Home"},
+                                  {"title": "Check home heating oil!", "due": "2026-10-20", "list": "Home"}],
+                      "upcoming": []}
+
+
+@pytest.mark.parametrize("text", [
+    "The gutter check needs doing when you're back.",
+    "The gutter check is on the list.",
+    "Raking the leaves is on your list.",
+])
+def test_reminder_not_in_the_input_is_rejected(text):
+    assert validate_opening(text, calendar_events=EVENTS, reminders=INVENTED_REMINDERS) is None
+
+
+@pytest.mark.parametrize("text", [
+    "Dr. Doshi's office is on the list for a Vyvanse request.",
+    "The salt check is on the list.",
+    "The heating oil check is on the list.",
+])
+def test_real_reminders_named_on_the_list_pass(text):
+    assert validate_opening(text, calendar_events=EVENTS, reminders=INVENTED_REMINDERS) == text
+
+
+def test_list_claims_unchecked_without_reminders_input():
+    text = "The gutter check is on the list."
+    assert validate_opening(text, calendar_events=EVENTS) == text
+
+
+def test_prompt_has_no_concrete_reminder_example(mocker):
+    call, _ = _prompt_for(mocker, calendar_events=EVENTS)
+    assert "gutter" not in call["system"]

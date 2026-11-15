@@ -44,7 +44,7 @@ _BASE_PROMPT = (
     "When LOCATION says away, do not suggest home tasks, chores around the house, or being home for a delivery; a delivery simply arrives while {name} is out. "
     "Do not assume an evening game is watched at home when {name} gets back after it starts; if LOCATION is unknown, do not say where it is watched. "
     "When LOCATION is unknown, do not guess whereabouts, and never say that the location is unknown or unclear: just leave it out. "
-    "Reminders: mention at most one, in a single flat clause such as 'the gutter check is on the list'. Never say how long it has been overdue, sitting or waiting, never give advice about when or whether to do it, and avoid words like worth, should, soon, urgent, or before the season turns. "
+    "Reminders: mention at most one, in a single flat clause of the form 'the <reminder> is on the list', using that reminder's own words; never name a task that is not in the reminders given. Never say how long it has been overdue, sitting or waiting, never give advice about when or whether to do it, and avoid words like worth, should, soon, urgent, or before the season turns. "
     "If you mention a delivery, do not restate its time window or any clock time; the Packages section has it. "
     "Work meetings are context, not a list: never enumerate meetings or give their times. At most characterize the workday in a phrase (for example, a meeting-heavy office day) or single out one meeting that is genuinely unusual, without its time. "
     "For evening events, use the EVENING TIMING line exactly; do not work out whether {name} is back in time yourself. "
@@ -400,6 +400,44 @@ def welcome_block(
 _COMMUTE_WORDS = re.compile(
     r"\b(?:(?<!school )bus(?:es)?|trains?|commut\w*|park[- ](?:and|&)[- ]ride|p&r|"
     r"bus\s+terminal|station|shuttl\w*|ride\s+home)\b", re.I)
+# "The X check is on the list": the task named must be one of the day's reminders.
+_LIST_CLAIM = re.compile(
+    r"\b(?:the|your|a)\s+(?P<a>[\w’'.& -]{2,40}?)\s+(?:check|reminder|task|to-?do)\b"
+    r"|(?P<b>[\w’'.& -]{3,50}?)\s+(?:is|are|sits|sit|stays?|remains?)\s+on\s+(?:the|your)\s+(?:to-?do\s+)?list\b",
+    re.I)
+_LIST_STOPWORDS = {"the", "your", "a", "an", "and", "of", "for", "to", "on", "in", "at", "with", "today",
+                   "tonight", "this", "that", "list", "also", "still", "one", "item", "office", "request",
+                   "check", "reminder", "task", "something", "there", "here", "it", "its", "dr", "mr", "ms", "mrs",
+                   "quick", "final", "last", "double", "small", "short", "usual", "daily", "weekly"}
+
+
+def _content_words(text: str) -> set[str]:
+    words = re.findall(r"[a-z0-9]+", (text or "").casefold().replace("’", "'"))
+    return {w[:5] for w in words if len(w) >= 3 and w not in _LIST_STOPWORDS}
+
+
+def _invented_reminder(text: str, reminders: dict | None, calendar_events: list) -> bool:
+    """A draft names a list item that matches no reminder (or event) title at all.
+
+    Conservative: one shared content word (compared on its first five letters) is enough,
+    and with no reminders input the check is skipped.
+    """
+    if not isinstance(reminders, dict):
+        return False
+    known = set()
+    for bucket in reminders.values():
+        for item in bucket or []:
+            if isinstance(item, dict):
+                known |= _content_words(item.get("title"))
+    for event in calendar_events or []:
+        known |= _content_words(event.get("title"))
+    for match in _LIST_CLAIM.finditer(text):
+        named = _content_words(match["a"] or match["b"])
+        if named and not named & known:
+            return True
+    return False
+
+
 # The location fact is for the model's reasoning; an unknown location is never news.
 _LOCATION_ECHO = re.compile(
     r"\b(?:location|whereabouts)\s+(?:(?:is|are|remains?)\s+(?:still\s+)?"
@@ -448,6 +486,7 @@ def validate_opening(text, *, calendar_events=None, weather_data=None, reminders
             or _unsupported_home_claim(text, location)
             or _commute_claim(text)
             or _LOCATION_ECHO.search(text)
+            or _invented_reminder(text, reminders, calendar_events or [])
             or _NAG_CLAIM.search(text)
             or len(_CLOCK_TIME.findall(text)) >= 3
             or opening_rejection(text, calendar_events or [], reminders, packages)):
