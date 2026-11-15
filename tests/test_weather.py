@@ -492,3 +492,39 @@ def test_weather_block_confirms_travel_only_for_trips_and_skips_transit(requests
         assert weather_block(config, calendar_events=trip)["travel_confirmed"] is True
         held = [{**meeting[0], "title": "Flight hold"}]
         assert weather_block(config, calendar_events=held)["travel_confirmed"] is False
+
+
+def test_weather_block_lists_home_first_then_each_destination_once():
+    from modules.weather import weather_block
+
+    events = [
+        {"title": "Meeting", "location": "New York, NY", "calendar": "Little York", "start": "09:00"},
+        {"title": "Lunch", "location": "New York, NY", "calendar": "Little York", "start": "12:00"},
+        {"title": "Trip to Buffalo", "location": "Buffalo, NY", "calendar": "Little York", "start": "18:00"},
+    ]
+    places = {"New York, NY": {"name": "New York, NY", "lat": 40.7128, "lon": -74.006},
+              "Buffalo, NY": {"name": "Buffalo, NY", "lat": 42.8864, "lon": -78.8784}}
+    with patch("modules.weather.geocode_location", side_effect=lambda loc: places[loc]), patch(
+        "modules.weather.fetch_weather", side_effect=lambda lat, lon, name, config: {"location": name}
+    ):
+        result = weather_block(WEATHERKIT_CONFIG, events)
+
+    assert [loc["location"] for loc in result["locations"]] == ["Warwick, NY", "New York", "Buffalo"]
+    # The opening's travel fact prefers the confirmed trip over the first stop.
+    assert (result["travel_city"], result["travel_confirmed"]) == ("Buffalo", True)
+
+
+def test_weather_block_caps_destinations_after_home():
+    from modules.weather import MAX_TRAVEL_LOCATIONS, weather_block
+
+    cities = [f"City{i}" for i in range(MAX_TRAVEL_LOCATIONS + 2)]
+    events = [{"title": "Visit", "location": c, "calendar": "Little York", "start": f"{i:02d}:00"}
+              for i, c in enumerate(cities)]
+    with patch("modules.weather.geocode_location",
+               side_effect=lambda loc: {"name": loc, "lat": 45.0 + cities.index(loc), "lon": -100.0}), patch(
+        "modules.weather.fetch_weather", side_effect=lambda lat, lon, name, config: {"location": name}
+    ):
+        result = weather_block(WEATHERKIT_CONFIG, events)
+
+    assert [loc["location"] for loc in result["locations"]] == ["Warwick, NY", *cities[:MAX_TRAVEL_LOCATIONS]]
+    assert (result["travel_city"], result["travel_confirmed"]) == ("City0", False)
