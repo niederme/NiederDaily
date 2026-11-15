@@ -349,7 +349,7 @@ def test_prompt_states_away_location_and_drops_day_marker_from_events(mocker):
     call, _ = _prompt_for(mocker, calendar_events=COMMUTE_DAY)
     prompt = call["messages"][0]["content"]
     assert "LOCATION: Jordan is away in Boston today" in prompt
-    assert "7:05am" in prompt and "7:40pm" in prompt
+    assert "7:05am" not in prompt and "7:40pm" not in prompt  # usual commute times stay out
     assert "] JD: BOS (" not in prompt
     assert "Never assume Jordan is home" in call["system"]
     assert "2 or 3 short paragraphs" in call["system"]
@@ -373,7 +373,7 @@ def test_home_claims_rejected_on_away_day(text):
 
 
 @pytest.mark.parametrize("text", [
-    "A city day: out on the early bus and back home around 7:40.",
+    "A city day, and back home in the evening.",
     "The order lands while you're in the city; you'll find it when you get home tonight.",
     "You'll be back at home after the first pitch.",
 ])
@@ -409,16 +409,28 @@ def test_cooldown_reminders_kept_out_of_prompt(mocker):
     assert "gutters" not in prompt and "library" in prompt
 
 
-def test_evening_timing_states_game_starts_before_return(mocker):
+def test_prompt_carries_no_commute_logistics(mocker):
     call, _ = _prompt_for(mocker, calendar_events=COMMUTE_DAY)
     prompt = call["messages"][0]["content"]
-    assert "EVENING TIMING:" in prompt
-    assert "starts at 7:00pm, before Jordan is back (about 7:40pm)" in prompt
+    assert "EVENING TIMING" not in prompt
+    assert "LOCATION: Jordan is away in Boston today" in prompt
+    assert "Never mention the commute" in call["system"]
 
 
-def test_no_evening_timing_line_when_location_unknown_or_home(mocker):
-    call, _ = _prompt_for(mocker, calendar_events=EVENTS)
-    assert "EVENING TIMING" not in call["messages"][0]["content"]
+@pytest.mark.parametrize("text", [
+    "A city day: out on the early bus and back home around 7:40.",
+    "The Metro gets you in before the first meeting.",
+    "Your ride home lands in Springfield before the game.",
+    "Leave time for the commute after the late meeting.",
+    "Catch the train after the review.",
+])
+def test_commute_mentions_rejected(text):
+    assert validate_opening(text, calendar_events=COMMUTE_DAY) is None
+
+
+def test_school_bus_is_not_a_commute_mention():
+    text = "The school bus run is the only fixed point this morning."
+    assert validate_opening(text, calendar_events=EVENTS) == text
 
 
 @pytest.mark.parametrize("text", [

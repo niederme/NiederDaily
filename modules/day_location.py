@@ -147,34 +147,16 @@ def derive_location(calendar_events: list | None, weather_data: dict | None = No
 
 
 def location_line(location: dict) -> str:
-    conf = profile.get()
-    commute = conf["commute"]
+    """The location fact for the opening. Commute logistics stay out of it on purpose:
+    the transit legs and times inform the home/away status but never reach the prompt."""
     name = profile.owner()
-    mode = commute.get("mode") or "bus"
     status = location.get("status")
     if status == "home":
         where = f" in {location['place']}" if location.get("place") else ""
         return (f"LOCATION: {name} is home{where} today, per the calendar ("
                 + "; ".join(location["evidence"]) + ").")
     if status == "away":
-        line = f"LOCATION: {name} is away in {location['place']} today"
-        if commute.get("city") and location["place"] == commute["city"]:
-            home_label = conf.get("home_label")
-            parts = []
-            if location.get("commute_source") == "usual":
-                if location.get("depart"):
-                    parts.append(f"on the usual commute: out on the {location['depart']} {mode}")
-                if location.get("back"):
-                    parts.append(f"back home{f' in {home_label}' if home_label else ''} about {location['back']}")
-            else:
-                if location.get("depart"):
-                    parts.append(f"leaving on the {location['depart']} {mode}")
-                if location.get("back"):
-                    stop = commute.get("arrival_stop")
-                    parts.append(f"the last listed {mode} home "
-                                 + (f"reaches {stop}" if stop else "arrives")
-                                 + f" about {location['back']}")
-            if parts:
-                line += ", " + ", ".join(parts)
-        return line + f". {name[:1].upper() + name[1:]} is not home during the day."
+        return (f"LOCATION: {name} is away in {location['place']} today. "
+                f"{name[:1].upper() + name[1:]} is not home during the day, and the return time "
+                "is not given: do not say where an evening event is watched or attended.")
     return f"LOCATION: unknown. The calendar does not say whether {name} is home or away today."

@@ -19,7 +19,9 @@ _BASE_PROMPT = (
     "Work reminders may provide context for {employer}, but do not assume every task is urgent or every "
     "meeting is important. Preserve supplied due dates; overdue does not automatically mean urgent. "
     "Use only connections supported by the inputs. Do not invent relationships, meeting purposes, "
-    "deadlines, preparation requirements, commute plans (beyond what LOCATION states), or free time from an incomplete calendar. "
+    "deadlines, preparation requirements, or free time from an incomplete calendar. "
+    "Never mention the commute: no buses or trains, lines, stops, stations, or departure or return times. "
+    "Saying where {name} is for the day is enough. "
     "Parcel calendar entries are delivery context, not pickups, errands, or attendance commitments. "
     "An estimated delivery window is not an appointment at its start time. Never join calendar and package records by merchant name alone. "
     "Keep reminder actions literal: a check is not a call, order, booking, or payment. Do not invent urgency, consequences, or how long an item has waited. "
@@ -257,9 +259,6 @@ def welcome_block(
         parts = [f"Today is {day_name}, {date_str}."]
         location = derive_location(calendar_events, weather_data)
         parts.append(location_line(location))
-        timing = evening_timing_line(location, calendar_events)
-        if timing:
-            parts.append(timing)
 
         if weather_data and weather_data.get("locations"):
             w = weather_data["locations"][0]
@@ -398,34 +397,20 @@ def welcome_block(
         return None
 
 
-def _clock_to_minutes(label: str | None) -> int | None:
-    match = re.match(r"^\s*(\d{1,2}):(\d{2})\s*(am|pm)\s*$", label or "", re.I)
-    if not match:
-        return None
-    return (int(match[1]) % 12 + (12 if match[3].lower() == "pm" else 0)) * 60 + int(match[2])
+_COMMUTE_WORDS = re.compile(
+    r"\b(?:(?<!school )bus(?:es)?|trains?|commut\w*|park[- ](?:and|&)[- ]ride|p&r|"
+    r"bus\s+terminal|station|shuttle|ride\s+home)\b", re.I)
 
 
-def evening_timing_line(location: dict, calendar_events: list | None) -> str | None:
-    """State plainly which evening events start before the reader is back, so the model need not guess."""
-    if (location or {}).get("status") != "away":
-        return None
-    back = _clock_to_minutes(location.get("back"))
-    lines = []
-    for event in calendar_events or []:
-        start = _clock_to_minutes(event.get("time"))
-        if event.get("all_day") or start is None or start < 17 * 60 or is_transit_option(event):
-            continue
-        name = event.get("title") or "event"
-        who = profile.owner()
-        if back is None:
-            lines.append(f"{name} at {event['time']}: {who}'s return time is unknown, "
-                         "so do not say where it is watched or attended")
-        elif start < back:
-            lines.append(f"{name} starts at {event['time']}, before {who} is back (about {location['back']}); "
-                         f"{who} misses the start and is not home for it")
-        else:
-            lines.append(f"{name} at {event['time']} starts after {who} is back (about {location['back']})")
-    return ("EVENING TIMING: " + " / ".join(lines) + ".") if lines else None
+def _commute_claim(text: str) -> bool:
+    """The opening never discusses the commute: generic transit words, or the configured
+    transit lines and stop names, mean the draft is rejected."""
+    if _COMMUTE_WORDS.search(text):
+        return True
+    commute = profile.get()["commute"]
+    names = [*(commute.get("transit_lines") or []), commute.get("arrival_stop"),
+             *(commute.get("arrival_stops") or [])]
+    return any(n and re.search(rf"\b{re.escape(n)}\b", text, re.I) for n in names)
 
 
 _NAG_CLAIM = re.compile(
@@ -454,6 +439,7 @@ def validate_opening(text, *, calendar_events=None, weather_data=None, reminders
         location = derive_location(calendar_events, weather_data)
     if (_unsupported_claim(text, calendar_events or [], weather_data)
             or _unsupported_home_claim(text, location)
+            or _commute_claim(text)
             or _NAG_CLAIM.search(text)
             or len(_CLOCK_TIME.findall(text)) >= 3
             or opening_rejection(text, calendar_events or [], reminders, packages)):

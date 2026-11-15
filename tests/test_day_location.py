@@ -39,9 +39,9 @@ def test_commute_day_marker_without_transit_events_uses_usual_commute():
     assert loc["status"] == "away" and loc["place"] == "Boston"
     assert (loc["depart"], loc["back"], loc["commute_source"]) == ("7:05am", "7:40pm", "usual")
     line = location_line(loc)
-    assert "Jordan is away in Boston" in line and "7:05am bus" in line
-    assert "back home in Springfield about 7:40pm" in line
-    assert "Jordan is not home during the day" in line
+    assert "Jordan is away in Boston" in line and "Jordan is not home during the day" in line
+    # Commute logistics inform the status but never reach the opening's prompt.
+    assert "7:05am" not in line and "7:40pm" not in line and "bus" not in line and "Springfield" not in line
 
 
 def test_configured_commute_times_are_used():
@@ -54,7 +54,7 @@ def test_commute_without_usual_times_states_no_times():
     profile.configure({**PROFILE, "commute": {**PROFILE["commute"], "depart": None, "home": None}})
     loc = derive_location(COMMUTE_DAY)
     assert (loc["status"], loc["depart"], loc["back"], loc["commute_source"]) == ("away", None, None, None)
-    assert location_line(loc) == "LOCATION: Jordan is away in Boston today. Jordan is not home during the day."
+    assert location_line(loc).startswith("LOCATION: Jordan is away in Boston today. Jordan is not home during the day")
 
 
 def test_booked_transit_events_give_departure_and_latest_listed_return():
@@ -69,7 +69,8 @@ def test_booked_transit_events_give_departure_and_latest_listed_return():
     loc = derive_location(events)
     assert loc["status"] == "away"
     assert (loc["depart"], loc["back"], loc["commute_source"]) == ("7:05am", "7:50pm", "calendar")
-    assert "the last listed bus home reaches Springfield about 7:50pm" in location_line(loc)
+    line = location_line(loc)
+    assert "7:05am" not in line and "7:50pm" not in line and "Springfield" not in line and "bus" not in line
 
 
 def test_home_day_markers():
