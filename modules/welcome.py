@@ -438,13 +438,52 @@ def _invented_reminder(text: str, reminders: dict | None, calendar_events: list)
     return False
 
 
+_GENERIC_REMINDER_WORDS = {"check", "night", "today", "call", "make", "more", "about", "with", "from",
+                           "calen", "sched", "remin", "order", "renew", "minim"}
+
+
+def _named_reminder_count(text: str, reminders: dict | None, calendar_events: list) -> int:
+    """How many distinct reminders a draft names, by words only that reminder has.
+
+    Words shared by two reminders, words found in the day's event titles, and generic
+    task words never count, so one mention is never counted twice.
+    """
+    if not isinstance(reminders, dict):
+        return 0
+    titles = []
+    for bucket in reminders.values():
+        for item in bucket or []:
+            if isinstance(item, dict) and item.get("title") and item["title"] not in titles:
+                titles.append(item["title"])
+    words = [{w for w in _content_words(t) if len(w) >= 4} - _GENERIC_REMINDER_WORDS for t in titles]
+    event_words = set()
+    for event in calendar_events or []:
+        event_words |= _content_words(event.get("title"))
+    seen = {}
+    for w in words:
+        for x in w:
+            seen[x] = seen.get(x, 0) + 1
+    text_words = _content_words(text)
+    named = 0
+    for w in words:
+        distinctive = {x for x in w if seen[x] == 1} - event_words
+        if distinctive & text_words:
+            named += 1
+    return named
+
+
 # The location fact is for the model's reasoning; an unknown location is never news.
 _LOCATION_ECHO = re.compile(
     r"\b(?:location|whereabouts)\s+(?:(?:is|are|remains?)\s+(?:still\s+)?"
     r"(?:unknown|unclear|not\s+(?:known|clear|stated|given|listed))|(?:isn|aren)['’]t\s+(?:known|clear))\b"
     r"|\b(?:unknown|unclear)\s+(?:location|whereabouts)\b"
     r"|\bsince\s+(?:your|the)\s+location\b"
-    r"|\b(?:not|isn['’]t)\s+(?:clear|known)\s+(?:where|whether)\s+you(?:['’](?:re|ll)|\s+are|\s+will)\b", re.I)
+    r"|\b(?:not|isn['’]t)\s+(?:clear|known)\s+(?:where|whether)\s+you(?:['’](?:re|ll)|\s+are|\s+will)\b"
+    # The return time is withheld on purpose; saying it is missing leaks the same internals.
+    r"|\breturn\s+tim(?:e|ing)\s+(?:(?:is|isn['’]t|is\s+not|was|has\s+not\s+been|hasn['’]t\s+been|remains?)\s+)?"
+    r"(?:still\s+)?(?:not\s+)?(?:set|given|known|clear|listed|stated|unknown|unclear|available)\b"
+    r"|\bno\s+(?:set\s+|listed\s+|known\s+)?return\s+tim(?:e|ing)\b"
+    r"|\b(?:unknown|unclear)\s+return\s+tim(?:e|ing)\b", re.I)
 
 
 def _commute_claim(text: str) -> bool:
@@ -487,6 +526,7 @@ def validate_opening(text, *, calendar_events=None, weather_data=None, reminders
             or _commute_claim(text)
             or _LOCATION_ECHO.search(text)
             or _invented_reminder(text, reminders, calendar_events or [])
+            or _named_reminder_count(text, reminders, calendar_events or []) > 1
             or _NAG_CLAIM.search(text)
             or len(_CLOCK_TIME.findall(text)) >= 3
             or opening_rejection(text, calendar_events or [], reminders, packages)):
