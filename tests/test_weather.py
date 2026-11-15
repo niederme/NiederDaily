@@ -420,18 +420,40 @@ def test_weather_sentence_falls_back_when_model_mentions_wrong_season():
             mock_date.today.return_value = date(2026, 4, 19)
             result = weather_sentence(loc, "test-key")
 
-    assert result == "Rain in Warwick, NY today, with a high near 51°F and a low around 38°F."
+    assert result == "Rain today."
 
-def test_fallback_weather_sentence_uses_current_temp_when_high_low_missing():
+def test_fallback_weather_sentence_skips_place_and_temps():
     from modules.weather import _fallback_weather_sentence
 
-    result = _fallback_weather_sentence({
-        "location": "Warwick, NY",
-        "condition": "Rain",
-        "temp": 43,
-    })
+    assert _fallback_weather_sentence({"location": "Warwick, NY", "condition": "Rain", "temp": 43}) == "Rain today."
+    assert _fallback_weather_sentence({"location": "Warwick, NY", "condition": "Unknown"}) == ""
 
-    assert result == "Rain in Warwick, NY today, with temperatures around 43°F."
+
+def test_weather_sentence_falls_back_when_model_repeats_line_details():
+    from modules.weather import weather_sentence
+
+    loc = {"location": "Warwick, NY", "lat": 41.2512, "temp": 69, "condition": "Mostly Cloudy", "high": 76, "low": 61}
+    for text in ("A mild day topping out at 76.", "Gray skies over Warwick this afternoon."):
+        with patch("anthropic.Anthropic") as mock_anthropic:
+            mock_anthropic.return_value.messages.create.return_value = MagicMock(content=[MagicMock(text=text)])
+            with patch("modules.weather.date") as mock_date:
+                mock_date.today.return_value = date(2026, 11, 15)
+                assert weather_sentence(loc, "test-key") == "Mostly Cloudy today."
+
+
+def test_weather_sentence_prompt_asks_for_no_temps_or_place():
+    from modules.weather import weather_sentence
+
+    with patch("anthropic.Anthropic") as mock_anthropic:
+        mock_anthropic.return_value.messages.create.return_value = MagicMock(
+            content=[MagicMock(text="A chilly autumn afternoon with mostly cloudy skies.")])
+        loc = {"location": "Warwick, NY", "lat": 41.2512, "temp": 69, "condition": "Mostly Cloudy", "high": 76, "low": 61}
+        with patch("modules.weather.date") as mock_date:
+            mock_date.today.return_value = date(2026, 11, 15)
+            assert weather_sentence(loc, "test-key") == "A chilly autumn afternoon with mostly cloudy skies."
+    prompt = mock_anthropic.return_value.messages.create.call_args.kwargs["messages"][0]["content"]
+    assert "do not mention any temperature, number, or the place name" in prompt
+
 
 def test_season_for_latitude_handles_both_hemispheres():
     from modules.weather import _season_for_latitude

@@ -52,8 +52,8 @@ CONDITION_LABELS = {
     "TropicalStorm": "Tropical Storm",
 }
 
-# No CONDITION_ICONS dict needed — renderer uses existing _weather_icon() SVGs,
-# which keyword-match on the condition string (e.g. "rain", "snow", "thunder", "clear", "fog").
+# No icon dict needed here: renderer._weather_emoji() keyword-matches the
+# condition label (e.g. "rain", "snow", "thunder", "clear", "fog").
 
 
 def _make_jwt(config: dict) -> str:
@@ -160,16 +160,24 @@ def _season_for_latitude(lat: float | None, today: date | None = None) -> str | 
 
 
 def _fallback_weather_sentence(loc: dict) -> str:
-    condition = str(loc.get("condition") or "Weather")
-    location = str(loc.get("location") or "today")
-    high = loc.get("high")
-    low = loc.get("low")
-    temp = loc.get("temp")
-    if high is not None and low is not None:
-        return f"{condition} in {location} today, with a high near {high}\N{DEGREE SIGN}F and a low around {low}\N{DEGREE SIGN}F."
-    if temp is None:
-        return f"{condition} in {location} today."
-    return f"{condition} in {location} today, with temperatures around {temp}\N{DEGREE SIGN}F."
+    """Plain blurb for when the model's sentence is unusable. The rendered line
+    already shows the place and temperatures, so this repeats neither."""
+    condition = str(loc.get("condition") or "").strip()
+    if not condition or condition == "Unknown":
+        return ""
+    return f"{condition} today."
+
+
+_TEMP_PATTERN = re.compile(r"\d|\N{DEGREE SIGN}|\bdegrees?\b", re.IGNORECASE)
+
+
+def _repeats_line_details(text: str, loc: dict) -> bool:
+    """True if the blurb repeats what the weather line already shows:
+    any number or degree mention, or the place name."""
+    if _TEMP_PATTERN.search(text):
+        return True
+    place = str(loc.get("location") or "").split(",")[0].strip().lower()
+    return bool(place) and place in text.lower()
 
 
 def _has_conflicting_season(text: str, expected_season: str | None) -> bool:
@@ -254,11 +262,14 @@ def weather_sentence(loc: dict, api_key: str) -> str:
                 f"If you mention a season, it must be {season}. "
             )
         prompt = (
-            f"Write a single short sentence describing today's weather for {loc['location']}. "
+            f"Write one short sentence, about 6 to 12 words, describing today's weather for {loc['location']}. "
             f"Current: {loc['temp']}°F, {loc['condition']}. "
             f"High {loc['high']}°, Low {loc['low']}°. "
             f"{season_guidance}"
-            f"Be specific and vivid. No greeting. Plain text only."
+            f"It appears right after the place name and temperatures, so do not mention "
+            f"any temperature, number, or the place name. Describe the feel and the sky, "
+            f"for example: \"A chilly autumn afternoon with mostly cloudy skies.\" "
+            f"No greeting. Plain text only."
         )
         resp = client.messages.create(
             model="claude-haiku-4-5-20251001",
@@ -266,7 +277,7 @@ def weather_sentence(loc: dict, api_key: str) -> str:
             messages=[{"role": "user", "content": prompt}],
         )
         sentence = resp.content[0].text.strip()
-        if _has_conflicting_season(sentence, season):
+        if _has_conflicting_season(sentence, season) or _repeats_line_details(sentence, loc):
             return _fallback_weather_sentence(loc)
         return sentence
     except Exception:
