@@ -558,3 +558,56 @@ def test_list_claims_unchecked_without_reminders_input():
 def test_prompt_has_no_concrete_reminder_example(mocker):
     call, _ = _prompt_for(mocker, calendar_events=EVENTS)
     assert "gutter" not in call["system"]
+
+
+MONDAY_REMINDERS = {
+    "overdue": [{"title": "Check Salt", "due": "2026-11-13", "list": "Home"},
+                {"title": "Talk to Alex about Thursday's schedule", "due": "2026-11-14", "list": "Home"},
+                {"title": "Recycling Night", "due": "2026-11-15", "list": "Home"},
+                {"title": "Do the calendars", "due": "2026-11-15", "list": "Home"}],
+    "today": [{"title": "ask Dr. Lee for more Ritalin", "due": "2026-11-16", "list": "Home"},
+              {"title": "BMW Oil change", "due": "2026-11-16", "list": "Home"},
+              {"title": "Check Propane", "due": "2026-11-16", "list": "Home"}],
+    "upcoming": [{"title": "Ritalin refill script", "due": "2026-11-17", "list": "Home"}],
+}
+MONDAY_EVENTS = [{"time": "11:15am", "title": "Design review", "calendar": "Home", "all_day": False},
+                 {"time": "5:00pm", "title": "Alex and Sam at practice", "calendar": "Home", "all_day": False}]
+
+
+def test_more_than_one_reminder_is_rejected():
+    text = ("Asking Dr. Lee for more Ritalin is on the list, and the BMW oil change is on the list. "
+            "Check Propane is also on the list.")
+    assert validate_opening(text, calendar_events=MONDAY_EVENTS, reminders=MONDAY_REMINDERS) is None
+
+
+@pytest.mark.parametrize("text", [
+    "Asking Dr. Lee for more Ritalin is on the list.",  # "Ritalin" is shared, "Lee" names one
+    "The design review is the one fixed point, and the propane check is on the list.",
+    "Alex and Sam have practice this evening; the salt check is on the list.",  # Alex is an event word
+    "It's on your calendar: a design review late morning.",  # "calendar" is not a reminder mention
+])
+def test_one_reminder_passes(text):
+    assert validate_opening(text, calendar_events=MONDAY_EVENTS, reminders=MONDAY_REMINDERS) == text
+
+
+@pytest.mark.parametrize("text", [
+    "An evening event with Jack and James is on your calendar, though return timing isn't set.",
+    "The return time is not given, so keep the evening loose.",
+    "With no return time listed, the game is a maybe.",
+    "Your return time is unknown.",
+])
+def test_return_time_echo_is_rejected(text):
+    assert validate_opening(text, calendar_events=EVENTS) is None
+
+
+def test_ordinary_return_language_passes():
+    text = "You'll be back home in time for dinner."
+    assert validate_opening(text, calendar_events=EVENTS) == text
+
+
+def test_prompt_offers_a_single_reminder_candidate(mocker):
+    call, _ = _prompt_for(mocker, calendar_events=MONDAY_EVENTS, reminders=MONDAY_REMINDERS,
+                          as_of=date(2026, 11, 16))
+    prompt = call["messages"][0]["content"]
+    assert "REMINDER (the only one" in prompt
+    assert prompt.count("(list: ") == 1
