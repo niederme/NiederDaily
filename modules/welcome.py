@@ -486,7 +486,8 @@ _LOCATION_ECHO = re.compile(
     r"|\breturn\s+tim(?:e|ing)\s+(?:(?:is|isn['’]t|is\s+not|was|has\s+not\s+been|hasn['’]t\s+been|remains?)\s+)?"
     r"(?:still\s+)?(?:not\s+)?(?:set|given|known|clear|listed|stated|unknown|unclear|available)\b"
     r"|\bno\s+(?:set\s+|listed\s+|known\s+)?return\s+tim(?:e|ing)\b"
-    r"|\b(?:unknown|unclear)\s+return\s+tim(?:e|ing)\b", re.I)
+    r"|\b(?:unknown|unclear)\s+return\s+tim(?:e|ing)\b"
+    r"|\breturn\s+tim(?:e|ing)\b[^.;!?]{0,30}?\b(?:isn['’]t|is\s+not|not\s+yet|unknown|unclear|undecided|unset|tbd)\b", re.I)
 
 
 def _commute_claim(text: str) -> bool:

@@ -595,6 +595,8 @@ def test_one_reminder_passes(text):
     "The return time is not given, so keep the evening loose.",
     "With no return time listed, the game is a maybe.",
     "Your return time is unknown.",
+    "Evening brings Jack and James, though your return time isn't nailed down yet.",
+    "The return timing is still not pinned down.",
 ])
 def test_return_time_echo_is_rejected(text):
     assert validate_opening(text, calendar_events=EVENTS) is None
