@@ -288,6 +288,7 @@ DEFAULT_TRAVEL_CALENDARS = {"Little York", "niederCal", "TripIt"}
 
 LOCATION_BLACKLIST = {"harriman", "hoboken", "secaucus", "woodbury"}
 DEFAULT_TRAVEL_MIN_MILES = 25
+MAX_TRAVEL_LOCATIONS = 3  # destinations shown after home
 
 # Event titles containing these strings are sports calendar subscriptions.
 # They should not trigger travel weather — John watches from home on TV.
@@ -309,13 +310,14 @@ def weather_block(config: dict, calendar_events: list) -> dict | None:
     if home is None:
         return None
 
-    travel = None
-    travel_city = None
-    travel_confirmed = False
+    # Home always comes first; every distinct far-away destination follows in calendar order.
+    travels, seen_cities = [], set()
     # Case-insensitive, like calendar selection ("TripIt" vs the provider's "Tripit").
     travel_calendars = {c.casefold() for c in config.get("weather_calendars", DEFAULT_TRAVEL_CALENDARS)}
     min_miles = config.get("weather_travel_min_miles", DEFAULT_TRAVEL_MIN_MILES)
     for event in sorted(calendar_events, key=lambda e: (e.get("all_day", True), e.get("start", ""))):
+        if len(travels) >= MAX_TRAVEL_LOCATIONS:
+            break
         if event.get("all_day") or is_transit_option(event):
             continue
         source_calendar = event.get("calendar") or ""
@@ -332,21 +334,25 @@ def weather_block(config: dict, calendar_events: list) -> dict | None:
             continue
         if _distance_miles(default, geo) <= min_miles:
             continue
-        city_lower = geo["name"].split(",")[0].strip().lower()
-        if any(b in city_lower for b in LOCATION_BLACKLIST):
+        city = geo["name"].split(",")[0].strip()
+        if any(b in city.lower() for b in LOCATION_BLACKLIST) or city.casefold() in seen_cities:
             continue
-        travel = fetch_weather(geo["lat"], geo["lon"], geo["name"].split(",")[0].strip(), config)
-        travel_city = geo["name"].split(",")[0].strip()
+        weather = fetch_weather(geo["lat"], geo["lon"], city, config)
+        if weather is None:
+            continue
+        seen_cities.add(city.casefold())
         title = (event.get("title") or "").casefold()
-        travel_confirmed = bool(
-            travel and (source_calendar.casefold() == "tripit" or re.search(r"\b(?:flight|trip|travel)\b", title))
+        confirmed = bool(
+            (source_calendar.casefold() == "tripit" or re.search(r"\b(?:flight|trip|travel)\b", title))
             and not re.search(r"\b(?:cancelled|canceled|hold|tentative)\b", title)
         )
-        break
+        travels.append((city, weather, confirmed))
 
-    locations = [home]
-    if travel:
-        locations.append(travel)
+    locations = [home] + [weather for _, weather, _ in travels]
+    # The opening's travel fact: the first confirmed trip, else the first destination.
+    lead = next((t for t in travels if t[2]), travels[0] if travels else None)
+    travel_city = lead[0] if lead else None
+    travel_confirmed = bool(lead and lead[2])
 
     return {"locations": locations, "travel_city": travel_city,
             "travel_confirmed": travel_confirmed}
