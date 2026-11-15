@@ -255,12 +255,22 @@ def test_footer_omits_weather_credit_without_weather():
     assert "legal-attribution" not in _html_from_message(msg)
 
 
-def test_reminder_row_puts_list_pill_before_bold_title():
+def test_reminders_render_as_checkbox_rows_under_list_headings():
+    reminders = {
+        "overdue": [{"title": "Order heating oil", "due": "2026-03-20", "list": "Little York", "list_color": "#c27be3"}],
+        "today": [{"title": "Return books", "due": "2026-03-21", "list": "Niedertodo", "list_color": "#0088FF"}],
+        "upcoming": [{"title": "Call accountant", "due": "2026-03-24", "list": "Niedertodo"}],
+    }
     msg = render_email(recipient="me@example.com", welcome=None,
-        weather=None, calendar=None, reminders=REMINDERS, messages=None, photo=None, nyt=None)
+        weather=None, calendar=None, reminders=reminders, messages=None, photo=None, nyt=None)
     html = _html_from_message(msg)
-    row = html[html.index("Overdue</span>"):]
-    assert row.index("House Wish List") < row.index('class="calendar-title">Call accountant')
+    assert html.count('class="reminder-list"') == 2
+    assert html.index('class="reminder-list">Niedertodo') < html.index("Return books") < html.index("Call accountant")
+    assert html.index("Call accountant") < html.index('class="reminder-list">Little York') < html.index("Order heating oil")
+    assert 'border-color:#c27be3' in html
+    assert '<span class="reminder-status reminder-overdue">Overdue</span>' in html
+    assert '<span class="reminder-status">Today</span>' in html
+    assert '<span class="reminder-status">Tue</span>' in html
 
 
 def test_reminders_grouped_by_list_in_preferred_order():
