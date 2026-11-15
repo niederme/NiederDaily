@@ -337,7 +337,10 @@ def welcome_block(
                         f"[{bucket.upper()}] {title} (list: {item.get('list') or 'unknown'}; {due})"
                     )
             if reminder_lines:
-                parts.append("REMINDERS: " + " / ".join(reminder_lines))
+                # One candidate only: given a list, the model recites it, and more than one
+                # named reminder fails the guard. The Reminders section shows the rest.
+                parts.append("REMINDER (the only one the opening may mention, or leave it out): "
+                             + reminder_lines[0])
 
         parcel_facts = package_context(packages)
         if parcel_facts:

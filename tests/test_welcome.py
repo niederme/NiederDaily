@@ -603,3 +603,11 @@ def test_return_time_echo_is_rejected(text):
 def test_ordinary_return_language_passes():
     text = "You'll be back home in time for dinner."
     assert validate_opening(text, calendar_events=EVENTS) == text
+
+
+def test_prompt_offers_a_single_reminder_candidate(mocker):
+    call, _ = _prompt_for(mocker, calendar_events=MONDAY_EVENTS, reminders=MONDAY_REMINDERS,
+                          as_of=date(2026, 11, 16))
+    prompt = call["messages"][0]["content"]
+    assert "REMINDER (the only one" in prompt
+    assert prompt.count("(list: ") == 1
