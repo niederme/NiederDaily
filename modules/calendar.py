@@ -49,9 +49,36 @@ def calendar_list_events(events: list | None, hidden_calendars: list | None = No
     if events is None:
         return None
     hidden = {name.casefold() for name in (hidden_calendars or []) if name}
-    return [e for e in events
-            if not is_transit_option(e) and not is_commute_hold(e)
-            and (e.get("calendar") or "").casefold() not in hidden]
+    return dedupe_events([e for e in events
+                          if not is_transit_option(e) and not is_commute_hold(e)
+                          and (e.get("calendar") or "").casefold() not in hidden])
+
+
+def _dedupe_key(event: dict) -> tuple:
+    title = " ".join((event.get("title") or "").casefold().split())
+    return (title, None if event.get("all_day") else event.get("time"))
+
+
+def dedupe_events(events: list | None) -> list | None:
+    """One row per event that sits on two calendars (same title and start, or both all-day).
+
+    The kept copy is the one on the reader's own calendars (`own_calendars`), then the one
+    with a location; ties keep the earlier row. Order is otherwise unchanged.
+    """
+    if events is None:
+        return None
+    own = {name.casefold() for name in profile.get().get("own_calendars") or [] if name}
+
+    def rank(event):
+        return ((event.get("calendar") or "").casefold() in own, bool((event.get("location") or "").strip()))
+
+    best: dict = {}
+    for index, event in enumerate(events):
+        key = _dedupe_key(event)
+        if key not in best or rank(event) > rank(events[best[key]]):
+            best[key] = index
+    keep = set(best.values())
+    return [event for index, event in enumerate(events) if index in keep]
 
 
 def _event_store():

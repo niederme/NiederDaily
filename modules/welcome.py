@@ -5,7 +5,7 @@ import json
 from datetime import date
 import re
 
-from modules.calendar import is_commute_hold, is_transit_option
+from modules.calendar import dedupe_events, is_commute_hold, is_transit_option
 from modules.day_location import derive_location, is_day_marker, location_line
 from modules.opening_history import filter_for_prompt
 from modules import profile
@@ -43,7 +43,7 @@ _BASE_PROMPT = (
     "Where {name} is comes only from the LOCATION line. Never assume {name} is home. Say or imply home only when LOCATION says home. "
     "When LOCATION says away, do not suggest home tasks, chores around the house, or being home for a delivery; a delivery simply arrives while {name} is out. "
     "Do not assume an evening game is watched at home when {name} gets back after it starts; if LOCATION is unknown, do not say where it is watched. "
-    "When LOCATION is unknown, do not guess whereabouts. "
+    "When LOCATION is unknown, do not guess whereabouts, and never say that the location is unknown or unclear: just leave it out. "
     "Reminders: mention at most one, in a single flat clause such as 'the gutter check is on the list'. Never say how long it has been overdue, sitting or waiting, never give advice about when or whether to do it, and avoid words like worth, should, soon, urgent, or before the season turns. "
     "If you mention a delivery, do not restate its time window or any clock time; the Packages section has it. "
     "Work meetings are context, not a list: never enumerate meetings or give their times. At most characterize the workday in a phrase (for example, a meeting-heavy office day) or single out one meeting that is genuinely unusual, without its time. "
@@ -267,7 +267,7 @@ def welcome_block(
                 parts.append(f"Traveling to {weather_data['travel_city']} today.")
 
         if calendar_events:
-            editorial_events = [e for e in calendar_events
+            editorial_events = [e for e in dedupe_events(calendar_events)
                                 if not is_transit_option(e) and not _is_preparation_event(e)
                                 and not is_day_marker(e) and not _is_commute_block(e)]
             timed = [e for e in editorial_events if not e.get("all_day")]
@@ -399,7 +399,14 @@ def welcome_block(
 
 _COMMUTE_WORDS = re.compile(
     r"\b(?:(?<!school )bus(?:es)?|trains?|commut\w*|park[- ](?:and|&)[- ]ride|p&r|"
-    r"bus\s+terminal|station|shuttle|ride\s+home)\b", re.I)
+    r"bus\s+terminal|station|shuttl\w*|ride\s+home)\b", re.I)
+# The location fact is for the model's reasoning; an unknown location is never news.
+_LOCATION_ECHO = re.compile(
+    r"\b(?:location|whereabouts)\s+(?:(?:is|are|remains?)\s+(?:still\s+)?"
+    r"(?:unknown|unclear|not\s+(?:known|clear|stated|given|listed))|(?:isn|aren)['’]t\s+(?:known|clear))\b"
+    r"|\b(?:unknown|unclear)\s+(?:location|whereabouts)\b"
+    r"|\bsince\s+(?:your|the)\s+location\b"
+    r"|\b(?:not|isn['’]t)\s+(?:clear|known)\s+(?:where|whether)\s+you(?:['’](?:re|ll)|\s+are|\s+will)\b", re.I)
 
 
 def _commute_claim(text: str) -> bool:
@@ -440,6 +447,7 @@ def validate_opening(text, *, calendar_events=None, weather_data=None, reminders
     if (_unsupported_claim(text, calendar_events or [], weather_data)
             or _unsupported_home_claim(text, location)
             or _commute_claim(text)
+            or _LOCATION_ECHO.search(text)
             or _NAG_CLAIM.search(text)
             or len(_CLOCK_TIME.findall(text)) >= 3
             or opening_rejection(text, calendar_events or [], reminders, packages)):
