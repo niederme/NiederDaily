@@ -291,3 +291,13 @@ def test_reminders_grouped_by_list_in_preferred_order():
     order = ["Book flights", "Renew passport", "Order heating oil", "Pay invoice", "Loose end"]
     positions = [html.index(t) for t in order]
     assert positions == sorted(positions)
+
+
+def test_calendar_location_is_plain_line_under_title():
+    msg = render_email(recipient="me@example.com", welcome=None,
+        weather=None, calendar=CALENDAR, reminders=None, messages=None, photo=None, nyt=None)
+    html = _html_from_message(msg)
+    assert '<span class="calendar-location">Zoom</span>' in html
+    css = html[html.index(".calendar-location{"):]
+    rule = css[:css.index("}")]
+    assert "font-size" not in rule and "margin" not in rule and "font-weight:400" in rule

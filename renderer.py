@@ -51,6 +51,7 @@ a{color:#121212;}
 .calendar-dot{display:inline-block;width:8px;height:8px;border-radius:999px;flex-shrink:0;}
 .calendar-line{display:flex;font-size:12px;line-height:1.4;margin-bottom:3px;}
 .calendar-title{display:block;font-weight:600;}
+.calendar-location{display:block;font-weight:400;color:#6d7178;}
 .reminder-group{margin:0 0 18px;}.reminder-group:last-child{margin-bottom:0;}
 .reminder-list{font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#6d7178;margin:0 0 8px;}
 .reminder-row{display:flex;align-items:center;gap:10px;padding:0 0 9px;margin:0 0 9px;border-bottom:1px solid rgba(214,208,198,0.55);}
@@ -234,7 +235,7 @@ def _calendar_html(events: list, *, show_rule: bool = True) -> str:
             source = f'<span class="calendar-source calendar-line">{dot}{_esc(e["calendar"])}</span>'
         loc = ""
         if e.get("location"):
-            loc = f'<span class="list-meta">{_esc(e["location"])}</span>'
+            loc = f'<span class="calendar-location">{_esc(e["location"])}</span>'
         payload = {
             "identifier": e.get("identifier"),
             "date": date.today().isoformat(),
