@@ -235,6 +235,15 @@ def reminders_block(lists: list | None = None, as_of: date | None = None) -> dic
         overdue.sort(key=lambda item: item["due"])
         today_items.sort(key=lambda item: item["title"].lower())
         upcoming.sort(key=lambda item: item["due"])
+        # The same reminder entered twice shows once per bucket, at its earliest due date.
+        for bucket in (overdue, today_items, upcoming):
+            seen, kept = set(), []
+            for item in bucket:
+                key = _normalized_title(item["title"])
+                if key not in seen:
+                    seen.add(key)
+                    kept.append(item)
+            bucket[:] = kept
         return {
             "overdue": overdue,
             "today": today_items,
