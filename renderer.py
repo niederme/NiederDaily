@@ -249,6 +249,21 @@ def _calendar_html(events: list, *, show_rule: bool = True) -> str:
     return _section("Calendar", "".join(rows), show_rule=show_rule)
 
 
+# Reminders are grouped by list in this order (case-insensitive); other lists
+# follow alphabetically, then reminders with no list.
+REMINDER_LIST_ORDER = ["Niedertodo", "Little York"]
+
+
+def _reminder_group_key(list_name: str | None) -> tuple:
+    name = (list_name or "").strip()
+    order = [n.casefold() for n in REMINDER_LIST_ORDER]
+    if name.casefold() in order:
+        return (0, order.index(name.casefold()), "")
+    if name:
+        return (1, 0, name.casefold())
+    return (2, 0, "")
+
+
 def _reminders_html(data: dict, *, show_rule: bool = True) -> str:
     def reminder_meta(item: dict) -> str:
         if not item.get("list"):
@@ -256,19 +271,23 @@ def _reminders_html(data: dict, *, show_rule: bool = True) -> str:
         dot = ""
         if item.get("list_color"):
             dot = f'<span class="calendar-dot" style="background:{_esc(item["list_color"])};"></span>'
-        return f'<span class="list-meta"><span class="calendar-source">{dot}{_esc(item["list"])}</span></span>'
+        return f'<span class="calendar-source calendar-line">{dot}{_esc(item["list"])}</span>'
+
+    def reminder_main(item: dict) -> str:
+        # List pill first (beside the badge), then the bold title, like calendar rows.
+        return f'<span class="list-main">{reminder_meta(item)}<span class="calendar-title">{_esc(item["title"])}</span></span>'
 
     rows = []
     for r in data.get("overdue", []):
         payload = {"identifier": r.get("identifier"), "due": r.get("due"), "list": r.get("list"), "title": r["title"]}
         time_html = f'<span class="list-time">{BADGE_OVERDUE}</span>'
-        main_html = f'<span class="list-main">{_esc(r["title"])}{reminder_meta(r)}</span>'
-        rows.append(f'<div class="list-row">{_row_link("reminder", time_html, main_html, payload)}</div>')
+        main_html = reminder_main(r)
+        rows.append((r.get("list"), f'<div class="list-row">{_row_link("reminder", time_html, main_html, payload)}</div>'))
     for r in data.get("today", []):
         payload = {"identifier": r.get("identifier"), "due": r.get("due"), "list": r.get("list"), "title": r["title"]}
         time_html = f'<span class="list-time">{BADGE_TODAY}</span>'
-        main_html = f'<span class="list-main">{_esc(r["title"])}{reminder_meta(r)}</span>'
-        rows.append(f'<div class="list-row">{_row_link("reminder", time_html, main_html, payload)}</div>')
+        main_html = reminder_main(r)
+        rows.append((r.get("list"), f'<div class="list-row">{_row_link("reminder", time_html, main_html, payload)}</div>'))
     next_day = None
     for r in data.get("upcoming", []):
         due_raw = r.get("due")
@@ -284,11 +303,13 @@ def _reminders_html(data: dict, *, show_rule: bool = True) -> str:
         badge = f'<span style="display:inline-block;min-width:56px;color:{MUTED};font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">{due}</span>'
         payload = {"identifier": r.get("identifier"), "due": r.get("due"), "list": r.get("list"), "title": r["title"]}
         time_html = f'<span class="list-time">{badge}</span>'
-        main_html = f'<span class="list-main">{_esc(r["title"])}{reminder_meta(r)}</span>'
-        rows.append(f'<div class="list-row">{_row_link("reminder", time_html, main_html, payload)}</div>')
+        main_html = reminder_main(r)
+        rows.append((r.get("list"), f'<div class="list-row">{_row_link("reminder", time_html, main_html, payload)}</div>'))
     if not rows:
         return _section("Reminders", '<div class="supporting">All clear.</div>', show_rule=show_rule)
-    return _section("Reminders", "".join(rows), show_rule=show_rule)
+    # Stable sort keeps overdue -> today -> upcoming order within each list.
+    rows.sort(key=lambda row: _reminder_group_key(row[0]))
+    return _section("Reminders", "".join(html for _, html in rows), show_rule=show_rule)
 
 
 def _nyt_html(stories: list, *, show_rule: bool = True) -> str:

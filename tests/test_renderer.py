@@ -253,3 +253,31 @@ def test_footer_omits_weather_credit_without_weather():
     msg = render_email(recipient="me@example.com", welcome=None,
         weather=None, calendar=None, reminders=None, messages=None, photo=None, nyt=None)
     assert "legal-attribution" not in _html_from_message(msg)
+
+
+def test_reminder_row_puts_list_pill_before_bold_title():
+    msg = render_email(recipient="me@example.com", welcome=None,
+        weather=None, calendar=None, reminders=REMINDERS, messages=None, photo=None, nyt=None)
+    html = _html_from_message(msg)
+    row = html[html.index("Overdue</span>"):]
+    assert row.index("House Wish List") < row.index('class="calendar-title">Call accountant')
+
+
+def test_reminders_grouped_by_list_in_preferred_order():
+    reminders = {
+        "overdue": [
+            {"title": "Pay invoice", "due": "2026-03-20", "list": "Work"},
+            {"title": "Order heating oil", "due": "2026-03-20", "list": "Little York"},
+        ],
+        "today": [
+            {"title": "Book flights", "due": "2026-03-21", "list": "niedertodo"},
+            {"title": "Loose end", "due": "2026-03-21"},
+        ],
+        "upcoming": [{"title": "Renew passport", "due": "2026-03-22", "list": "Niedertodo"}],
+    }
+    msg = render_email(recipient="me@example.com", welcome=None,
+        weather=None, calendar=None, reminders=reminders, messages=None, photo=None, nyt=None)
+    html = _html_from_message(msg)
+    order = ["Book flights", "Renew passport", "Order heating oil", "Pay invoice", "Loose end"]
+    positions = [html.index(t) for t in order]
+    assert positions == sorted(positions)
