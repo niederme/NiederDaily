@@ -24,17 +24,27 @@ from modules.messages import messages_block, contacts_access_granted
 from modules.photo import photo_access_granted, photo_block
 from modules.tweet import tweet_block
 from modules.nyt import NYT_URL, nyt_block
+from modules.parcel_api import live_packages_block
 from renderer import render_email
 from sender import send_email
 
 
-def run(config_path: str = None, as_of=None):
+def run(config_path: str = None, as_of=None, parcel_snapshot_path: str = None,
+        require_packages: bool = False, test_mode: bool = False):
     try:
         conf = cfg.load_config(config_path)
     except cfg.ConfigError as e:
         logging.error(f"Config error: {e}")
         sys.exit(1)
     profile.configure(conf)
+    if test_mode:
+        require_packages = True
+        # Fail closed: a test goes only to the explicitly configured owner address.
+        allowed = (conf.get("test_recipient") or "").strip()
+        if not allowed or conf.get("recipient_email") != allowed:
+            logging.error("NiederDaily package test blocked: recipient is not the configured "
+                          "test_recipient alone.")
+            return False
 
     # Step 1 & 2: gather weather and calendar first (needed by welcome)
     weather = _safe(weather_block, conf, calendar_events=[])
@@ -51,20 +61,31 @@ def run(config_path: str = None, as_of=None):
 
     # Steps 3-6: independent modules
     reminders = _safe(reminders_block, conf.get("reminders_lists", []), as_of=as_of)
-    messages  = None  # Unreliable reply-state quip is not source evidence.
+    messages  = None  # Unused quip has unreliable reply-state evidence; do not collect or generate.
     photo     = _safe(photo_block, conf["anthropic_api_key"], as_of=as_of)
     tweet     = _safe(tweet_block, as_of=as_of)
     nyt       = _safe(nyt_block, conf.get("nyt_api_key"))
+    packages  = _safe(live_packages_block,
+                      parcel_snapshot_path if parcel_snapshot_path is not None
+                      else conf.get("parcel_snapshot_path"), as_of=as_of)
+
+    if require_packages and (not packages or packages.get("freshness") != "fresh"
+            or not (packages.get("shipments") or packages.get("unlabeled_statuses")
+                    or packages.get("no_active"))
+            or weather is None or calendar is None or reminders is None):
+        logging.error("NiederDaily test blocked: fresh package summary or core sections unavailable.")
+        return False
 
     # Step 7: orient the opening using the available day and task context.
     # Only a real daily send reads and later updates the mention history.
-    real_send = as_of is None
+    real_send = not test_mode and as_of is None
     history_file = opening_history.history_path(conf)
     mention_history = opening_history.load(history_file) if real_send else {}
     welcome = _safe(welcome_block, conf["anthropic_api_key"],
                     weather_data=weather, calendar_events=calendar,
                     nyt_stories=nyt, photo=photo, messages=messages, tweet=tweet,
-                    reminders=reminders, mention_history=mention_history,
+                    reminders=reminders, packages=packages,
+                    mention_history=mention_history,
                     as_of=as_of)
 
     msg = render_email(
@@ -77,14 +98,18 @@ def run(config_path: str = None, as_of=None):
         photo=photo,
         nyt=nyt,
         tweet=tweet,
+        packages=packages,
         as_of=as_of,
+        test_mode=test_mode,
     )
 
     token_path = str(Path.home() / ".niederdaily" / "token.json")
     secret_path = str(Path.home() / ".niederdaily" / "client_secret.json")
-    success = send_email(msg, secret_path, token_path)
+    success = (send_email(msg, secret_path, token_path, max_attempts=1)
+               if test_mode else send_email(msg, secret_path, token_path))
     if success:
-        logging.info("NiederDaily sent successfully.")
+        logging.info("NiederDaily package test sent successfully." if test_mode
+                     else "NiederDaily sent successfully.")
         if real_send and welcome:
             from datetime import date as _today
             # Match only the reminders the opening could see, so a held-back item's
@@ -95,6 +120,7 @@ def run(config_path: str = None, as_of=None):
                 logging.warning("Could not update the opening mention history.")
     else:
         logging.error("Failed to send NiederDaily.")
+    return success
 
 
 def _safe(fn, *args, **kwargs):
@@ -284,6 +310,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--preflight", action="store_true")
     parser.add_argument("--config", default=None)
+    parser.add_argument("--parcel-snapshot", default=None,
+                        help="Fallback owner-private Parcel summary file, used only when the Parcel API (Keychain key) is unavailable.")
+    parser.add_argument("--require-packages", action="store_true",
+                        help="For a one-time real test, abort before sending if fresh packages or core sections are unavailable.")
+    parser.add_argument("--test-packages", action="store_true",
+                        help="Send one clearly marked package test to the owner (config test_recipient), with no automatic send retry.")
     parser.add_argument("--date", default=None,
                         help="Override 'today' (YYYY-MM-DD) — send the newsletter as if it were this date. "
                              "Affects the date-driven modules: tweet + photo on-this-day, calendar and "
@@ -302,4 +334,9 @@ if __name__ == "__main__":
     if args.preflight:
         preflight()
     else:
-        run(config_path=args.config, as_of=as_of)
+        success = run(config_path=args.config, as_of=as_of,
+                      parcel_snapshot_path=args.parcel_snapshot,
+                      require_packages=args.require_packages,
+                      test_mode=args.test_packages)
+        if (args.require_packages or args.test_packages) and not success:
+            sys.exit(1)

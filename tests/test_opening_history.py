@@ -90,6 +90,7 @@ def _run_with(mocker, tmp_path, *, as_of=None, sent=True,
     mocker.patch("modules.reminders.reminders_block", return_value=reminders)
     mocker.patch("modules.photo.photo_block", return_value=None)
     mocker.patch("modules.nyt.nyt_block", return_value=None)
+    mocker.patch("modules.parcel_api.live_packages_block", return_value=None)
     mocker.patch("modules.tweet.tweet_block", return_value=None)
     mocker.patch("renderer.render_email", return_value=MagicMock())
     mocker.patch("sender.send_email", return_value=sent)

@@ -1,18 +1,29 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, datetime, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
 from html import escape as _esc
 from urllib.parse import quote
+from zoneinfo import ZoneInfo
 
 ACCENT = "#ff453a"
 INK = "#121212"
 MUTED = "#474a51"
 LINE = "#d6d0c6"
 SHORTCUT_NAME = "Open NiederDaily Item"
+
+PACKAGE_CARRIERS = {
+    "fedex": ("FedEx", "#A02A7B"),
+    "ups": ("UPS", "#694122"),
+    "dhl": ("DHL", "#826100"),
+    "amzlus": ("Amazon", "#995000"),
+    "amazon": ("Amazon", "#995000"),
+    "usps": ("USPS", "#1165A3"),
+    "swiship": ("Swiship", "#121212"),
+}
 
 BADGE_REPLY = f'<span style="display:inline-block;color:{ACCENT};font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Needs reply</span>'
 
@@ -41,13 +52,14 @@ a{color:#121212;}
 .list-row:last-child{padding-bottom:0;margin-bottom:0;border-bottom:0;}
 .list-time{min-width:56px;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#474a51;}
 .list-main{flex:1;font-size:15px;line-height:1.35;color:#121212;}
+.list-time.pkg-today,.list-time.pkg-late{color:#ff453a;}
 .item-link{color:#121212;text-decoration:none;}
 .item-link:hover{text-decoration:underline;}
 .item-row-link{display:flex;gap:18px;align-items:baseline;width:100%;color:inherit;text-decoration:none;}
 .item-row-link:hover .list-main{text-decoration:underline;}
 .list-meta{display:block;font-size:12px;line-height:1.4;color:#474a51;margin-top:4px;}
 .meta-sep{color:#9aa0a6;margin:0 6px;}
-.calendar-source{display:inline-flex;align-items:center;gap:6px;color:#6d7178;white-space:nowrap;}
+.calendar-source{display:inline-flex;align-items:center;gap:6px;font-weight:700;white-space:nowrap;}
 .calendar-dot{display:inline-block;width:8px;height:8px;border-radius:999px;flex-shrink:0;}
 .calendar-line{display:flex;font-size:12px;line-height:1.4;margin-bottom:3px;}
 .calendar-title{display:block;font-weight:600;}
@@ -232,7 +244,9 @@ def _calendar_html(events: list, *, show_rule: bool = True) -> str:
             dot = ""
             if e.get("calendar_color"):
                 dot = f'<span class="calendar-dot" style="background:{_esc(e["calendar_color"])};"></span>'
-            source = f'<span class="calendar-source calendar-line">{dot}{_esc(e["calendar"])}</span>'
+            color = _esc(e.get("calendar_color") or "#6d7178")
+            source = (f'<span class="calendar-source calendar-line" style="color:{color};">'
+                      f'{dot}{_esc(e["calendar"])}</span>')
         loc = ""
         if e.get("location"):
             loc = f'<span class="calendar-location">{_esc(e["location"])}</span>'
@@ -435,6 +449,161 @@ def _tweet_html(tweet: dict, *, show_rule: bool = True) -> str:
     return _section(None, body, show_rule=show_rule)
 
 
+PACKAGE_ZONE = ZoneInfo("America/New_York")
+# Rows that need attention sort first, ahead of the date order.
+PACKAGE_URGENT = {"out for delivery", "failed delivery attempt", "delivery exception"}
+
+
+def _package_moment(day: str, time: str | None, source_zone: str | None) -> datetime:
+    moment = datetime.strptime(day + ("T" + time if time else ""),
+                               "%Y-%m-%dT%H:%M" if time else "%Y-%m-%d")
+    if time and source_zone == "UTC":
+        return moment.replace(tzinfo=timezone.utc).astimezone(PACKAGE_ZONE)
+    return moment
+
+
+def _package_date(moment: datetime, *, include_date: bool = True,
+                  include_time: bool = True) -> str:
+    day = moment.strftime("%b %-d") if include_date else ""
+    if not include_time:
+        return day
+    hour = moment.strftime("%-I:%M %p" if moment.minute else "%-I %p")
+    return f"{day}, {hour}" if day else hour
+
+
+def _package_clock(moment: datetime) -> str:
+    """Calendar-style clock: "5:19am", "8pm"."""
+    clock = moment.strftime("%-I:%M" if moment.minute else "%-I")
+    return clock + moment.strftime("%p").lower()
+
+
+def _package_day_range(first: date, last: date) -> str:
+    if first.month == last.month:
+        return f"{first.strftime('%b %-d')}–{last.day}"
+    return f"{first.strftime('%b %-d')}–{last.strftime('%b %-d')}"
+
+
+def _package_when(expected: dict | None, status: str,
+                  today: date) -> tuple[str, str, date | None]:
+    """Left-column label, its CSS class, and the start date used for sorting."""
+    if status == "delivered":
+        return "Delivered", "", None
+    if not expected:
+        return "No date", "", None
+    zone = expected["timezone"]
+    first = _package_moment(expected["date"], expected["time"], zone).date()
+    last = (_package_moment(expected["end_date"], expected["end_time"], zone).date()
+            if expected["end_date"] else first)
+    if last < today:
+        label = (first.strftime("%b %-d") if last == first
+                 else _package_day_range(first, last))
+        return label, " pkg-late", first
+    if last != first:
+        if all(2 <= (day - today).days <= 6 for day in (first, last)):
+            return f"{first.strftime('%a')}–{last.strftime('%a')}", "", first
+        return _package_day_range(first, last), "", first
+    days = (first - today).days
+    if days == 0:
+        return "Today", " pkg-today", first
+    if days == 1:
+        return "Tomorrow", "", first
+    if days <= 6:
+        return first.strftime("%a"), "", first
+    return first.strftime("%b %-d"), "", first
+
+
+def _package_window(expected: dict | None) -> str | None:
+    """Delivery time of day, if Parcel gave one: "by 8pm" or "2–6pm"."""
+    if not expected or not (expected["time"] or expected["end_time"]):
+        return None
+    zone = expected["timezone"]
+    start = (_package_moment(expected["date"], expected["time"], zone)
+             if expected["time"] else None)
+    end = (_package_moment(expected["end_date"], expected["end_time"], zone)
+           if expected["end_date"] and expected["end_time"] else None)
+    if start and end and start.date() == end.date() and start < end:
+        first, last = _package_clock(start), _package_clock(end)
+        if first[-2:] == last[-2:]:
+            first = first[:-2]
+        return f"{first}–{last}"
+    return f"by {_package_clock(end or start)}"
+
+
+def _package_event_when(event: dict, today: date) -> str:
+    moment = _package_moment(event["date"], event.get("time"), event.get("timezone"))
+    has_time = bool(event.get("time"))
+    days = (today - moment.date()).days
+    if days == 0:
+        return _package_clock(moment) if has_time else "today"
+    if 1 <= days <= 6:
+        day = moment.strftime("%a")
+    else:
+        day = moment.strftime("%b %-d") + ("," if has_time else "")
+    return f"{day} {_package_clock(moment)}" if has_time else day
+
+
+def _packages_html(packages: dict, *, show_rule: bool = True,
+                   today: date | None = None) -> str:
+    today = today or date.today()
+    rows = []
+    if packages.get("refresh_succeeded") is False:
+        checked = None
+        try:
+            moment = datetime.fromisoformat(packages.get("as_of", "").replace("Z", "+00:00"))
+            if moment.tzinfo is not None:
+                checked = _package_date(moment.astimezone(PACKAGE_ZONE)) + " ET"
+        except (AttributeError, TypeError, ValueError):
+            pass
+        notice = (f"Couldn't refresh; last checked {checked}." if checked else
+                  "Couldn't refresh; no usable snapshot." if packages.get("freshness") == "unavailable"
+                  else "Couldn't refresh; last checked time unavailable.")
+        rows.append(f'<div class="supporting">{_esc(notice)}</div>')
+    if packages.get("freshness") == "stale":
+        rows.append('<div class="supporting">Parcel data may be out of date.</div>')
+    if packages.get("freshness") == "unavailable":
+        rows.append('<div class="supporting">Packages unavailable.</div>')
+    if packages.get("truncated"):
+        rows.append('<div class="supporting">More shipments may be listed in Parcel.</div>')
+    entries = []
+    for package in packages["shipments"]:
+        expected = package.get("expected_delivery")
+        label, label_class, start = _package_when(expected, package["status"], today)
+        entries.append((package, label, label_class, start))
+    entries.sort(key=lambda entry: (entry[0]["status"] not in PACKAGE_URGENT,
+                                    entry[3] is None, entry[3] or date.max))
+    for package, label, label_class, _start in entries:
+        status = package["status"].capitalize()
+        details = [status]
+        window = _package_window(package.get("expected_delivery"))
+        if window:
+            details.append(window)
+        event = package.get("latest_event")
+        if event and event["status"].casefold() != status.casefold():
+            details.append(event["status"])
+            if event.get("date"):
+                details.append(_package_event_when(event, today))
+        carrier_code = package.get("carrier_code") or ""
+        carrier, color = PACKAGE_CARRIERS.get(carrier_code, (carrier_code.upper() or "Carrier", "#121212"))
+        labels = [value for value in (package.get("company"), package.get("item")) if value]
+        name = " · ".join(labels) if labels else "Package"
+        time_html = f'<span class="list-time{label_class}">{_esc(label)}</span>'
+        main_html = (
+            f'<span class="list-main">'
+            f'<span class="calendar-source calendar-line" style="color:{color};">'
+            f'<span class="calendar-dot" style="background:{color};"></span>{_esc(carrier)}</span>'
+            f'<span class="calendar-title">{_esc(name)}</span>'
+            f'<span class="calendar-location">{_esc(" · ".join(details))}</span></span>'
+        )
+        rows.append(f'<div class="list-row package-row">'
+                    f'{_row_link("package", time_html, main_html, {})}</div>')
+    if (packages.get("no_active") and packages.get("freshness") == "fresh"
+            and packages.get("refresh_succeeded") is True):
+        rows.append('<div class="supporting">No active packages.</div>')
+    elif packages.get("coverage_note") and packages.get("freshness") != "unavailable":
+        rows.append(f'<div class="supporting">{_esc(packages["coverage_note"])}</div>')
+    return _section("Packages", "".join(rows), show_rule=show_rule)
+
+
 def render_email(
     recipient: str,
     welcome: str | None,
@@ -446,10 +615,13 @@ def render_email(
     nyt: list | None,
     tweet: dict | None = None,
     as_of: date | None = None,
+    packages: dict | None = None,
+    test_mode: bool = False,
 ) -> MIMEMultipart:
     today = as_of or date.today()
     date_str = today.strftime("%A, %B %-d, %Y")
-    subject = f"NiederDaily · {date_str}"
+    subject = (f"TEST · NiederDaily Packages · {date_str}"
+               if test_mode else f"NiederDaily · {date_str}")
 
     welcome_html = ""
     if welcome:
@@ -457,6 +629,9 @@ def render_email(
         welcome_html = '<div class="welcome">' + ''.join(
             f'<p>{_esc(part)}</p>' for part in paragraphs
         ) + '</div>'
+    test_html = ('<div class="supporting" style="font-weight:700;color:#995000;'
+                 'margin:0 0 16px;">TEST EDITION · Package integration preview</div>'
+                 if test_mode else "")
 
     sections = []
     weather_icons: list = []
@@ -471,6 +646,9 @@ def render_email(
         next_section_rule = True
     if reminders:
         sections.append(_reminders_html(reminders, show_rule=next_section_rule))
+        next_section_rule = True
+    if packages:
+        sections.append(_packages_html(packages, show_rule=next_section_rule, today=today))
         next_section_rule = True
     if photo:
         sections.append(_photo_html(photo, show_rule=next_section_rule))
@@ -491,6 +669,7 @@ def render_email(
   <div class="header">
     <div class="date-line">{date_str}</div>
     <div class="logo">Nieder<span style="color:{ACCENT};">Daily</span></div>
+    {test_html}
     {welcome_html}
   </div>
   {"".join(sections)}

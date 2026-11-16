@@ -9,6 +9,8 @@
     <array>
         <string>__APP_PATH__/Contents/MacOS/NiederDaily</string>
         <string>--run</string>
+        <string>--parcel-snapshot</string>
+        <string>__CONFIG_DIR__/parcel/summary.json</string>
     </array>
     <key>StartCalendarInterval</key>
     <dict>

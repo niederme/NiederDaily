@@ -301,3 +301,15 @@ def test_calendar_location_is_plain_line_under_title():
     css = html[html.index(".calendar-location{"):]
     rule = css[:css.index("}")]
     assert "font-size" not in rule and "margin" not in rule and "font-weight:400" in rule
+
+
+def test_calendar_source_is_bold_in_its_calendar_color():
+    msg = render_email(recipient="me@example.com", welcome=None,
+        weather=None, calendar=CALENDAR + [{"time": "1:00pm", "title": "No color",
+                                            "calendar": "Other", "all_day": False}],
+        reminders=None, messages=None, photo=None, nyt=None)
+    html = _html_from_message(msg)
+    assert ('<span class="calendar-source calendar-line" style="color:#0088FF;">'
+            '<span class="calendar-dot" style="background:#0088FF;"></span>Personal</span>') in html
+    assert '<span class="calendar-source calendar-line" style="color:#6d7178;">Other</span>' in html
+    assert ".calendar-source{display:inline-flex;align-items:center;gap:6px;font-weight:700;white-space:nowrap;}" in html

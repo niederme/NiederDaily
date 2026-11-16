@@ -54,6 +54,7 @@ echo "✓ Built app wrapper at $APP_PATH"
 sed \
   -e "s|__APP_PATH__|$APP_PATH|g" \
   -e "s|__LOG_DIR__|$LOG_DIR|g" \
+  -e "s|__CONFIG_DIR__|$CONFIG_DIR|g" \
   "$REPO_DIR/setup/me.nieder.daily.plist.template" > "$PLIST_DEST"
 echo "✓ LaunchAgent plist written to $PLIST_DEST"
 
