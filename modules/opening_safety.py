@@ -60,24 +60,45 @@ def package_context(packages):
     return facts
 
 
+_FACT_IDENTITY = ("company", "item", "carrier_code")
+_PACKAGE_NOUN = re.compile(r"\b(?:packages?|deliver(?:y|ies)|shipments?)\b", re.I)
+_PACKAGE_PRONOUN = re.compile(r"\b(?:them|those|it|both)\b", re.I)
+_PICKUP_WORD = re.compile(r"pick|collect", re.I)
+# A place name, not a claim that a reminder is urgent.
+_URGENT_CARE = re.compile(r"\burgent\s+care\b", re.I)
+
+
 def opening_rejection(text, events, reminders=None, packages=None):
     """Return a non-private reason for omission, or None. Ambiguity fails closed."""
     deliveries = [e for e in events if calendar_kind(e) == "delivery"]
     pickups = [e for e in events if calendar_kind(e) == "pickup"
                or calendar_kind(e) != "delivery" and _ERRAND.search(e.get("title") or "")]
     facts = package_context(packages)
+    # Identify a package by who sent it, what it is and who carries it. Never stringify the
+    # whole fact: its nested estimate dict adds "time", "date", "end", "none" and date digits
+    # like "11", so "the play at 11" read as a package time.
     delivery_tokens = set().union(*(_tokens(e.get("title", "")) for e in deliveries),
-                                 *(_tokens(" ".join(str(v or "") for v in f.values())) for f in facts))
+                                 *(_tokens(" ".join(str(f.get(k) or "") for k in _FACT_IDENTITY))
+                                   for f in facts))
     reminder_rows = [r for bucket in ("today", "overdue", "upcoming")
                      for r in (reminders or {}).get(bucket, []) if isinstance(r, dict)]
     # Keep paragraph-wide checks where a pronoun could refer to an earlier source.
     if deliveries or facts:
+        previous_referenced = False
         for sentence in re.split(r"(?<=[.!?])\s+", text):
             tokens = _tokens(sentence)
-            references_delivery = bool(tokens & delivery_tokens) or bool(re.search(
-                r"\b(?:packages?|deliver(?:y|ies)|shipments?|them|those|it|both)\b", sentence, re.I))
+            named = bool(tokens & delivery_tokens) or bool(_PACKAGE_NOUN.search(sentence))
+            # A pronoun points at a package only when that sentence or the one before names one;
+            # otherwise "catch it at 8" about a hockey game reads as a delivery time.
+            references_delivery = named or (previous_referenced and bool(_PACKAGE_PRONOUN.search(sentence)))
+            previous_referenced = references_delivery
+            errands = [m.group() for m in _ERRAND.finditer(sentence)]
+            # Pickup wording fails closed. Softer errand wording ("an urgent care visit", "fit it
+            # in the margins", "not a casual errand") counts only in a sentence about a package.
+            if not references_delivery and not any(_PICKUP_WORD.search(e) for e in errands):
+                errands = []
             explicit = []
-            if _ERRAND.search(sentence):
+            if errands:
                 explicit = [e for e in pickups if _tokens(e.get("title", "")) & tokens]
                 if (not explicit or re.search(r"\b(?:delivery|deliveries|shipments?|packages?)\b", sentence, re.I)
                         or re.search(r"\b(?:two|both|\d+)\s+(?:\w+\s+)?pick[ -]?ups?\b", sentence, re.I)):
@@ -86,7 +107,7 @@ def opening_rejection(text, events, reminders=None, packages=None):
             if references_delivery and not explicit and re.search(r"\b(?:at|by|for)\s+(?:\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)?|noon|midnight)\b", sentence, re.I):
                 return "delivery_exact_time"
     previous_matching = []
-    for sentence in re.split(r"(?<=[.!?])\s+", text):
+    for sentence in re.split(r"(?<=[.!?])\s+", _URGENT_CARE.sub("clinic", text)):
         matching = [r for r in reminder_rows if _tokens(r.get("title", "")) & _tokens(sentence)]
         if matching:
             previous_matching = matching
@@ -101,7 +122,9 @@ def opening_rejection(text, events, reminders=None, packages=None):
             return "reminder_inferred_age"
         if _URGENCY.search(sentence):
             return "reminder_inferred_urgency"
+        # A sentence often lists several reminders ("call your mom and talk to D about the
+        # schedule"); an action word is faithful when one of them carries it in its own title.
         for action in _ACTIONS.values():
-            if action.search(sentence) and not all(action.search(r.get("title", "")) for r in matching):
+            if action.search(sentence) and not any(action.search(r.get("title", "")) for r in matching):
                 return "reminder_changed_action"
     return None
