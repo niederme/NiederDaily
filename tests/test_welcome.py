@@ -443,7 +443,7 @@ def test_reminder_nagging_rejected(text):
 
 
 def test_em_dashes_become_commas_and_overdue_dates_hidden(mocker):
-    assert validate_opening("A city day—nothing pressing.", calendar_events=EVENTS) == "A city day, nothing pressing."
+    assert validate_opening("A quiet day—nothing pressing.", calendar_events=EVENTS) == "A quiet day, nothing pressing."
     reminders = {"today": [], "upcoming": [],
                  "overdue": [{"title": "Clean the gutters!", "due": "2026-10-20", "list": "Home"}]}
     call, _ = _prompt_for(mocker, calendar_events=EVENTS, reminders=reminders, as_of=date(2026, 11, 11))
@@ -613,3 +613,61 @@ def test_prompt_offers_a_single_reminder_candidate(mocker):
     prompt = call["messages"][0]["content"]
     assert "REMINDER (the only one" in prompt
     assert prompt.count("(list: ") == 1
+
+
+def _simple_prompt(mocker, events, reminders=None):
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = MagicMock(content=[MagicMock(text="A quiet day.")])
+    mocker.patch("modules.welcome.anthropic.Anthropic", return_value=mock_client)
+    welcome_block("sk-ant-test", weather_data=WEATHER, calendar_events=events, reminders=reminders,
+                  as_of=date(2026, 3, 2))
+    return mock_client.messages.create.call_args.kwargs["messages"][0]["content"]
+
+
+def test_city_claims_need_a_day_marker():
+    meetings = [{"time": "10:00am", "title": "Design review", "calendar": "Work", "all_day": False,
+                 "location": "South Station, Boston, MA"}]
+    for text in ("You're in Boston today, with a design review.", "An office day with one review.",
+                 "You're in the city today.", "A meeting-heavy BOS day ahead."):
+        assert validate_opening(text, calendar_events=meetings) is None, text
+    marked = meetings + [{"time": None, "title": "JD: BOS", "calendar": "Home", "all_day": True}]
+    assert validate_opening("You're in Boston today, with a design review.", calendar_events=marked)
+    # Naming another town for an event is fine.
+    therapy = [{"time": "5:00pm", "title": "OT for Kid", "calendar": "Home", "all_day": False, "location": "Shelbyville"}]
+    assert validate_opening("The evening has OT in Shelbyville.", calendar_events=therapy)
+
+
+def test_hedging_is_rejected():
+    for text in ("A review somewhere in the middle of the day.", "The specifics aren't clear from here.",
+                 "It seems a light day."):
+        assert validate_opening(text, calendar_events=EVENTS) is None, text
+
+
+def test_event_place_reaches_prompt_but_not_virtual_or_city_rooms(mocker):
+    events = [
+        {"time": "5:00pm", "title": "OT for Kid", "calendar": "Home", "all_day": False,
+         "location": "Shelbyville Therapy\n12 Elm St, Shelbyville"},
+        {"time": "10:00am", "title": "Design review", "calendar": "Work", "all_day": False,
+         "location": "Microsoft Teams Meeting"},
+        {"time": "11:00am", "title": "Planning", "calendar": "Work", "all_day": False,
+         "location": "4th floor, South Station, Boston, MA"},
+    ]
+    prompt = _simple_prompt(mocker, events)
+    assert "place: Shelbyville Therapy" in prompt
+    assert "Teams" not in prompt and "South Station" not in prompt
+    assert "LOCATION: unknown" in prompt
+
+
+def test_medical_reminders_are_never_offered_to_the_opening(mocker):
+    reminders = {"today": [{"title": "Ask Dr. Example for a refill", "list": "Todo"},
+                           {"title": "Get a veggie tray", "list": "Todo"}], "overdue": [], "upcoming": []}
+    prompt = _simple_prompt(mocker, EVENTS, reminders)
+    assert "veggie tray" in prompt and "Dr. Example" not in prompt
+
+
+def test_prompt_forbids_assuming_away_and_hedging():
+    from modules.welcome import system_prompt
+    text = system_prompt()
+    assert "Never assume Jordan is away either" in text
+    assert "never hedge" in text
+    assert "office day" not in text.split("Work meetings are context")[1]

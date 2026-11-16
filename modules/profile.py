@@ -14,7 +14,7 @@ import copy
 COMMUTE_DEFAULTS = {
     "city": None,              # e.g. "Capital City": where a commute day takes the reader
     "city_aliases": [],        # day-marker places that mean the commute city, e.g. ["CC", "downtown"]
-    "location_keywords": [],   # event locations that place the reader in the city
+    "location_keywords": [],   # event locations in the city; kept out of the opening unless the reader is there
     "transit_lines": [],       # timetable title prefixes, e.g. ["Metro"] for "Metro 12 Inbound"
     "mode": "bus",             # how the commute is described ("bus", "train")
     "depart": None,            # usual departure, e.g. "7:05am"

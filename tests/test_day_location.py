@@ -57,8 +57,19 @@ def test_commute_without_usual_times_states_no_times():
     assert location_line(loc).startswith("LOCATION: Jordan is away in Boston today. Jordan is not home during the day")
 
 
-def test_booked_transit_events_give_departure_and_latest_listed_return():
+def test_transit_events_alone_never_place_the_reader():
     events = [
+        {"time": "7:05am", "end_time": "8:20am", "title": "Metro 500 Inbound", "calendar": "Home",
+         "location": "Springfield Park and Ride", "all_day": False},
+        {"time": "6:30pm", "end_time": "7:50pm", "title": "Metro 500 Outbound", "calendar": "Home",
+         "location": "South Station, Boston, MA", "all_day": False},
+    ]
+    assert derive_location(events)["status"] == "unknown"
+
+
+def test_transit_events_on_a_marked_commute_day_give_departure_and_latest_listed_return():
+    events = [
+        {"time": None, "title": "JD: BOS", "calendar": "Home", "all_day": True},
         {"time": "7:05am", "end_time": "8:20am", "title": "Metro 500 Inbound", "calendar": "Home",
          "location": "Springfield Park and Ride", "all_day": False},
         {"time": "5:30pm", "end_time": "6:48pm", "title": "Metro 400 Outbound", "calendar": "Home",
@@ -91,13 +102,25 @@ def test_conflicting_markers_are_unknown():
     assert loc["status"] == "unknown"
 
 
-def test_city_location_on_own_calendar_implies_away_but_not_for_household_member():
+def test_events_located_in_the_city_never_place_the_reader():
+    # Work meetings are often virtual even when the invite names the office.
+    meeting = {"time": "10:00am", "title": "Design review", "calendar": "Work", "all_day": False,
+               "location": "South Station, Boston, MA; Video call"}
     dentist = {"time": "5:00pm", "title": "JD: Dentist", "calendar": "Home", "all_day": False,
                "location": "1 Example St, Boston, MA 02110"}
-    assert derive_location([dentist])["status"] == "away"
-    assert derive_location([{**dentist, "title": "AB: Dentist"}])["status"] == "unknown"
-    # Subscribed calendars (sports, concerts) never place the reader anywhere.
-    assert derive_location([{**dentist, "calendar": "Concerts"}])["status"] == "unknown"
+    assert derive_location([meeting])["status"] == "unknown"
+    assert derive_location([dentist])["status"] == "unknown"
+
+
+def test_in_style_day_markers():
+    profile.configure({**PROFILE, "day_marker_prefixes": ["JD", "Jordan"]})
+    for title, place in (("Jordan in BOS", "Boston"), ("JD in Denver", "Denver"), ("JD - Boston", "Boston"),
+                         ("JD:BOS", "Boston")):
+        loc = derive_location([{"title": title, "all_day": True, "calendar": "Home"}])
+        assert (loc["status"], loc["place"]) == ("away", place), title
+    assert derive_location([{"title": "Jordan in charge of the bake sale", "all_day": True}])["status"] == "unknown"
+    # A timed event is never a day marker.
+    assert derive_location([{"title": "Jordan in BOS", "all_day": False}])["status"] == "unknown"
 
 
 def test_confirmed_travel_and_multi_day_trip_marker():
