@@ -13,6 +13,69 @@ It currently combines:
 - a short Claude-written welcome line
 - New York Times Top Stories
 
+An optional Packages section reads active deliveries straight from the
+Parcel API (`api.parcel.app/external/deliveries/?filter_mode=active`, one call
+per run against Parcel's 20-per-hour limit). The API key lives only in the
+macOS login Keychain as a generic password with service
+`niederdaily.parcel-api`; `modules/parcel_api.py` reads it with
+`/usr/bin/security`, sends it only in the `api-key` header, and never logs or
+stores it. Store or replace it with (the trailing `-w` prompts for the key so
+it stays out of shell history):
+
+```bash
+security add-generic-password -U -s niederdaily.parcel-api -a "$USER" -T /usr/bin/security -w
+```
+
+The API response is reduced to the v1 summary below before display: tracking
+numbers become a one-way hash, and locations, extra information, and raw event
+text are dropped. Each delivery's own Parcel description is used as its label,
+still subject to the sensitive-term check. If the key is missing or the API
+call fails, NiederDaily falls back to the legacy snapshot at
+`--parcel-snapshot ~/.niederdaily/parcel/summary.json`, which
+the existing 05:55 LaunchAgent still passes. A missing or expired snapshot
+leaves the section out.
+
+The handoff is a 0600 owner-owned JSON file at the absolute path above,
+written atomically by `setup/write_parcel_summary_snapshot.py` from the
+owner-only tool result. It must be at most 64 KiB and contain the tool's
+version 1 schema. The writer rejects an older `as_of` or an older generation
+for the same `as_of`, so out-of-order results cannot replace a newer snapshot.
+The [synthetic contract fixture](tests/fixtures/parcel_brief_summary_v1.json)
+shows the exact required fields, including freshness and coverage bounds.
+
+The reader shows one row per `is_active: true` shipment, including its carrier
+and delivery status. Company and item labels appear only when `label_source`
+is `trusted_validated_ingest` and pass an additional sensitive-term check. Carrier
+accents are FedEx magenta, UPS brown, Amazon orange, DHL gold, and USPS blue;
+unknown carriers use black. Each carrier name matches its dot color. It
+uses a documented status only when `status_code` is 0–8 and the status text is
+recognized; otherwise it says “Status unavailable.” The v1 contract also
+accepts optional, nullable `expected_delivery` and `latest_event` objects
+from a validated cloud producer. The exact safe shapes are in
+[the package detail handoff](docs/parcel-brief-detail.md). The renderer puts a
+trusted company and benign item first, then status, any actual expected date
+or window, any safe latest event, and the carrier with matching dot and text
+color. No tracking link or raw event text enters the handoff. A `stale` cache
+under 24 hours receives an explicit warning; `unavailable` produces a coverage
+notice, while older or invalid data is omitted. The section shows at most 20
+entries and notes incomplete, unlabeled, unknown, or truncated coverage. It
+says “No active packages” only when the fresh, complete result explicitly sets
+`coverage.can_state_no_active`. Unknown fields, including raw messages and
+addresses, are never rendered. Before setting `parcel_snapshot_path` in the
+private runtime config, verify that the recipient is the owner alone and that a
+supported read-only producer writes this schema. Historical `--date` sends omit
+live package data.
+
+For a one-time owner-only test with a real sanitized owner-only result, set
+`test_recipient` in the private config to the same address as `recipient_email`
+(the test refuses to send if it is missing or differs), then pass
+`--parcel-snapshot /absolute/private/path.json --test-packages` through the
+existing NiederDaily.app `--run` launch. The test flag requires a fresh package
+section and core modules, marks the subject and HTML, and disables automatic
+send retries. Check Gmail Sent before any manual retry after an uncertain send.
+The launcher forwards these flags to Python without modifying the recurring
+configuration or rebuilding the app.
+
 The current branch also includes a substantial visual refresh so the email feels closer to the `nieder.me/2026` editorial style on desktop and mobile.
 
 ## Highlights
@@ -48,7 +111,7 @@ If a module fails, the send can still continue. The app logs the failure and omi
 - local access to Calendar, Reminders, Photos, Contacts, Messages, and Shortcuts as needed
 - optional: [`birdclaw`](https://birdclaw.sh) CLI (`brew install steipete/tap/birdclaw`) with a synced archive/likes/bookmarks for the Tweet of the Day module
 
-Python dependencies live in [`requirements.txt`](/Users/niederme/~Repos/NiederDaily/requirements.txt):
+Python dependencies live in [`requirements.txt`](requirements.txt):
 
 - `anthropic`
 - `google-auth-oauthlib`
@@ -82,6 +145,7 @@ Create `~/.niederdaily/config.json`:
 ```json
 {
   "recipient_email": "you@example.com",
+  "test_recipient": "you@example.com",
   "default_location": { "name": "Warwick, NY", "lat": 41.2512, "lon": -74.3607 },
   "nyt_api_key": "YOUR_NYT_KEY",
   "anthropic_api_key": "YOUR_ANTHROPIC_KEY",
@@ -93,7 +157,7 @@ Create `~/.niederdaily/config.json`:
 }
 ```
 
-Required keys are defined in [`config.py`](/Users/niederme/~Repos/NiederDaily/config.py). Calendar and weather calendar lists are optional filters.
+Required keys are defined in [`config.py`](config.py). Calendar and weather calendar lists are optional filters.
 
 `calendar_hide_from_list` names calendars that are still read (they inform the opening, location and travel weather) but are left out of the email's Calendar list, matched case-insensitively against the configured calendar name, e.g. `["Work", "Deliveries", "Birthdays"]`. The list also always omits commute timetable legs (`commute.transit_lines`) and bare "Travel"/"Commute" holds.
 
@@ -231,7 +295,7 @@ but protected local modules may be omitted.
 ### Rebuild and run the app wrapper
 
 ```bash
-bash ~/~Repos/NiederDaily/setup/build_niederdaily_app.sh \
+bash ~/Repos/NiederDaily/setup/build_niederdaily_app.sh \
   && open -W -n -gj ~/Applications/NiederDaily.app --args --run
 ```
 
@@ -257,8 +321,8 @@ tail -n 50 ~/.niederdaily/logs/niederdaily.log
 
 The repo includes:
 
-- a launch agent template at [`setup/me.nieder.daily.plist.template`](/Users/niederme/~Repos/NiederDaily/setup/me.nieder.daily.plist.template)
-- an app builder at [`setup/build_niederdaily_app.sh`](/Users/niederme/~Repos/NiederDaily/setup/build_niederdaily_app.sh)
+- a launch agent template at [`setup/me.nieder.daily.plist.template`](setup/me.nieder.daily.plist.template)
+- an app builder at [`setup/build_niederdaily_app.sh`](setup/build_niederdaily_app.sh)
 
 The launch agent plist runs the app wrapper executable directly under `launchd`:
 
@@ -286,18 +350,18 @@ launchctl print gui/$(id -u)/me.nieder.daily
 
 ## Project Layout
 
-- [`niederdaily.py`](/Users/niederme/~Repos/NiederDaily/niederdaily.py): main entry point and preflight
-- [`renderer.py`](/Users/niederme/~Repos/NiederDaily/renderer.py): HTML email rendering
-- [`sender.py`](/Users/niederme/~Repos/NiederDaily/sender.py): Gmail send path
-- [`modules/weather.py`](/Users/niederme/~Repos/NiederDaily/modules/weather.py): weather + summary sentence
-- [`modules/calendar.py`](/Users/niederme/~Repos/NiederDaily/modules/calendar.py): EventKit calendar fetch
-- [`modules/reminders.py`](/Users/niederme/~Repos/NiederDaily/modules/reminders.py): EventKit reminders fetch
-- [`modules/messages.py`](/Users/niederme/~Repos/NiederDaily/modules/messages.py): Messages snapshot
-- [`modules/photo.py`](/Users/niederme/~Repos/NiederDaily/modules/photo.py): "On This Day" photo selection
-- [`modules/tweet.py`](/Users/niederme/~Repos/NiederDaily/modules/tweet.py): "Tweet of the Day" from the local birdclaw store
-- [`modules/nyt.py`](/Users/niederme/~Repos/NiederDaily/modules/nyt.py): NYT Top Stories fetch
-- [`modules/welcome.py`](/Users/niederme/~Repos/NiederDaily/modules/welcome.py): Claude prompt + welcome line
-- [`tests/`](/Users/niederme/~Repos/NiederDaily/tests): focused module and renderer tests
+- [`niederdaily.py`](niederdaily.py): main entry point and preflight
+- [`renderer.py`](renderer.py): HTML email rendering
+- [`sender.py`](sender.py): Gmail send path
+- [`modules/weather.py`](modules/weather.py): weather + summary sentence
+- [`modules/calendar.py`](modules/calendar.py): EventKit calendar fetch
+- [`modules/reminders.py`](modules/reminders.py): EventKit reminders fetch
+- [`modules/messages.py`](modules/messages.py): Messages snapshot
+- [`modules/photo.py`](modules/photo.py): "On This Day" photo selection
+- [`modules/tweet.py`](modules/tweet.py): "Tweet of the Day" from the local birdclaw store
+- [`modules/nyt.py`](modules/nyt.py): NYT Top Stories fetch
+- [`modules/welcome.py`](modules/welcome.py): Claude prompt + welcome line
+- [`tests/`](tests): focused module and renderer tests
 
 ## Current State
 
