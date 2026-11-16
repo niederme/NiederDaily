@@ -1,16 +1,16 @@
 """Deterministic "where is the reader today" fact, derived before the model sees anything.
 
 Sources, all configured in the profile (see modules/profile.py and the README):
-- All-day "<PREFIX>: <place>" day markers (`day_marker_prefixes`) say where the reader
-  is for the day: "JD: Boston" is a trip, "JD: WFH" or "JD: Home" a home day
-  (`home_keywords`), and a `commute.city_aliases` place is a commute day.
-- Commute timetable events ("<line> 12 Inbound", `commute.transit_lines`): an Inbound
-  event is the booked ride into the commute city. Outbound events are evening return
-  options, often more than one, so they bound the return time but never confirm
-  which ride the reader takes.
-- Timed entries on the reader's own calendars (`own_calendars`) located in the
-  commute city (`commute.location_keywords`) imply a commute day.
+- All-day day markers (`day_marker_prefixes`), titled "<PREFIX>: <place>" or
+  "<PREFIX> in <place>", say where the reader is for the day: "JD: Boston" is a trip,
+  "JD: WFH" or "JD: Home" a home day (`home_keywords`), and a `commute.city_aliases`
+  place is a commute day.
 - Weather travel detection with travel_confirmed (TripIt, flight, trip) is away.
+
+Nothing else places the reader. Work meetings are often virtual, so a meeting located
+in the commute city says nothing about where the reader is, and commute timetable
+events ("<line> 12 Inbound", `commute.transit_lines`) are standing options, not proof
+of a trip: on a marked commute day they only refine the departure and return times.
 
 When signals conflict, or there are none, the status is "unknown": the opening
 must not assume the reader is home.
@@ -32,17 +32,12 @@ def _day_marker(title: str):
     prefixes = _prefix_pattern(profile.get()["day_marker_prefixes"])
     if not prefixes:
         return None
-    return re.match(rf"^\s*(?:{prefixes})\s*:\s*(?P<place>[^()]+?)\s*(?:\(.*\))?\s*$", title or "", re.I)
-
-
-def _other_owner(title: str) -> bool:
-    prefixes = _prefix_pattern(profile.get()["household_prefixes"])
-    return bool(prefixes and re.match(rf"^\s*(?:{prefixes})\s*:", title or "", re.I))
-
-
-def _city_location(location: str) -> bool:
-    keywords = [k for k in profile.get()["commute"].get("location_keywords") or [] if k]
-    return any(re.search(rf"\b{re.escape(k)}\b", location or "", re.I) for k in keywords)
+    match = re.match(rf"^\s*(?:{prefixes})(?P<sep>\s*:\s*|\s+[-–]\s+|\s+in\s+)(?P<place>[^()]+?)\s*(?:\(.*\))?\s*$",
+                     title or "", re.I)
+    # "Jordan in BOS" is a marker; "Jordan in charge of the bake sale" is not.
+    if match and match["sep"].strip().lower() == "in" and len(match["place"].split()) > 3:
+        return None
+    return match
 
 
 def is_day_marker(event: dict) -> bool:
@@ -80,7 +75,6 @@ def derive_location(calendar_events: list | None, weather_data: dict | None = No
     commute = conf["commute"]
     city = commute.get("city")
     home_keywords = {_fold(k) for k in conf["home_keywords"] or []}
-    own_calendars = {_fold(c) for c in conf["own_calendars"] or []}
     events = calendar_events or []
     away, home, evidence = [], [], []
 
@@ -100,21 +94,6 @@ def derive_location(calendar_events: list | None, weather_data: dict | None = No
 
     inbound = [e for e in events if is_transit_option(e) and re.search(r"\bInbound\b", e.get("title") or "", re.I)]
     outbound = [e for e in events if is_transit_option(e) and re.search(r"\bOutbound\b", e.get("title") or "", re.I)]
-    if inbound and city:
-        away.append(city)
-        evidence.append(inbound[0].get("title"))
-
-    for event in events:
-        if not city or event.get("all_day") or is_transit_option(event):
-            continue
-        if _fold(event.get("calendar") or "") not in own_calendars:
-            continue
-        if _other_owner(event.get("title") or ""):
-            continue
-        if _city_location(event.get("location") or ""):
-            away.append(city)
-            evidence.append(event.get("title"))
-
     if (weather_data or {}).get("travel_confirmed") and (weather_data or {}).get("travel_city"):
         away.append(weather_data["travel_city"])
         evidence.append("confirmed travel")

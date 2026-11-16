@@ -41,13 +41,18 @@ _BASE_PROMPT = (
     "Use old photos, tweets, and headlines occasionally, only when they add something worthwhile. "
     "Mention weather only when it materially affects the day. "
     "Where {name} is comes only from the LOCATION line. Never assume {name} is home. Say or imply home only when LOCATION says home. "
+    "Never assume {name} is away either: name a city, or say 'in the city', 'in the office', or 'an office day', only when LOCATION says away in that place. "
+    "Work meetings are often virtual; they never say where {name} is. "
     "When LOCATION says away, do not suggest home tasks, chores around the house, or being home for a delivery; a delivery simply arrives while {name} is out. "
     "Do not assume an evening game is watched at home when {name} gets back after it starts; if LOCATION is unknown, do not say where it is watched. "
     "When LOCATION is unknown, do not guess whereabouts, and never say that the location is unknown or unclear: just leave it out. "
-    "Reminders: mention at most one, in a single flat clause of the form 'the <reminder> is on the list', using that reminder's own words; never name a task that is not in the reminders given. Never say how long it has been overdue, sitting or waiting, never give advice about when or whether to do it, and avoid words like worth, should, soon, urgent, or before the season turns. "
+    "Reminders: mention at most one, in a short natural clause that names it with that reminder's own key words, turned into a plain noun phrase (for 'Get a veggie tray', say 'the veggie tray is on the list', never 'Get a veggie tray is on the list' or 'The getting of a veggie tray'); never name a task that is not in the reminders given. Never mention a medical, health, or prescription reminder. Never say how long it has been overdue, sitting or waiting, never give advice about when or whether to do it, and avoid words like worth, should, soon, urgent, or before the season turns. "
     "If you mention a delivery, do not restate its time window or any clock time; the Packages section has it. "
-    "Work meetings are context, not a list: never enumerate meetings or give their times. At most characterize the workday in a phrase (for example, a meeting-heavy office day) or single out one meeting that is genuinely unusual, without its time. "
+    "Work meetings are context, not a list: never enumerate meetings or give their times. At most characterize the workday in a phrase (for example, a meeting-heavy day) or single out one meeting that is genuinely unusual, without its time. "
     "For evening events, use the EVENING TIMING line exactly; do not work out whether {name} is back in time yourself. "
+    "When an event lists a place, say where it is if you mention it (for example, an evening appointment in Springfield). "
+    "Write with confidence about what the inputs say and leave out what they do not: never hedge or comment on missing detail "
+    "(no 'somewhere in the middle', 'specifics aren't clear', 'from here', 'it seems', 'apparently', 'presumably'). "
     "When the day is quiet or context is sparse, keep the opening brief and factual; do not manufacture an angle."
 )
 
@@ -108,6 +113,12 @@ def _is_routine_event(event: dict) -> bool:
 
 _TIMED_REMINDER = re.compile(r"\b(?:at\s+)?\d{1,2}(?::\d{2})?\s*(?:am|pm)\b", re.I)
 _APPOINTMENT_REMINDER = re.compile(r"\b(?:therapy|therapist|appointment|session|dentist|doctor|clinic)\b", re.I)
+# Medical items stay in the Reminders section; the opening never picks them.
+_MEDICAL_REMINDER = re.compile(
+    r"\b(?:dr|doctor|rx|prescriptions?|scripts?|refills?|pharmacy|meds?|medications?|pills?|"
+    r"doses?|dosage|vitamins?|appointment)\b", re.I)
+_VIRTUAL_PLACE = re.compile(
+    r"https?://|\b(?:teams|zoom|webex|google\s+meet|meet\.google|virtual|online|remote|dial[- ]in|phone)\b", re.I)
 _TRAVEL_CLAIM = re.compile(
     r"\b(?:travel(?:l?ing)?|trip|head(?:ed|ing) to|going to|off to|bound for|"
     r"arriving in|departing for|destination|on your way to)\b", re.I
@@ -127,6 +138,29 @@ _PAYMENT_ASSERTION = re.compile(
     r"charged|withdrawn|payable)\b", re.I
 )
 _CLOCK = re.compile(r"\b(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)?", re.I)
+
+
+def _city_names() -> list[str]:
+    commute = profile.get()["commute"]
+    return [n for n in [commute.get("city"), *(commute.get("city_aliases") or []),
+                        *(commute.get("location_keywords") or [])] if n]
+
+
+def _event_place(event: dict, location: dict) -> str | None:
+    """A short, physical place for the prompt ("Springfield"), or None.
+
+    Virtual meeting locations are dropped, and so are places in the commute city unless
+    LOCATION puts the reader there: a meeting room downtown is not evidence of a trip.
+    """
+    raw = (event.get("location") or "").strip()
+    if not raw or _VIRTUAL_PLACE.search(raw):
+        return None
+    place = " ".join(raw.splitlines()[0].split())[:80].rstrip(" ,")
+    commute_city = profile.get()["commute"].get("city")
+    if (location.get("status") != "away" or location.get("place") != commute_city) and any(
+            re.search(rf"\b{re.escape(n)}\b", raw, re.I) for n in _city_names()):
+        return None
+    return place or None
 
 
 def _is_preparation_event(event: dict) -> bool:
@@ -292,8 +326,10 @@ def welcome_block(
                             # Restated windows trip the exact-time guard; the reader is out anyway.
                             when = (f"arrives today while {profile.owner()} is out; no action needed; "
                                     "do not restate the time")
+                    place = None if kind == "delivery" else _event_place(event, location)
+                    where = f"place: {place}; " if place else ""
                     event_lines.append(
-                        f"[{priority}] {event['title']} ({when}; "
+                        f"[{priority}] {event['title']} ({when}; {where}"
                         f"source calendar: {event.get('calendar') or 'unknown'}; type: {kind}; "
                         f"owner: {event.get('owner') or 'unknown'})")
                 parts.append("CALENDAR OPTIONS, ranked by editorial interest: " + " / ".join(event_lines) + ".")
@@ -327,6 +363,7 @@ def welcome_block(
                 for item in prompt_reminders.get(bucket, [])[:5]:
                     title = item.get("title") or ""
                     if (_TIMED_REMINDER.search(title) or _APPOINTMENT_REMINDER.search(title)
+                            or _MEDICAL_REMINDER.search(title)
                             or _FINANCIAL_REMINDER.search(title)
                             or (item.get("list") or "").casefold() in _FINANCIAL_LISTS):
                         continue
@@ -490,6 +527,31 @@ _LOCATION_ECHO = re.compile(
     r"|\breturn\s+tim(?:e|ing)\b[^.;!?]{0,30}?\b(?:isn['’]t|not|unknown|unclear|undecided|unset|tbd)\b", re.I)
 
 
+_HEDGE = re.compile(
+    r"\bsomewhere\s+in\s+(?:the\s+)?(?:middle|mix|there|between)\b"
+    r"|\b(?:specifics|details|timing|times?)\s+(?:aren['’]t|are\s+not|isn['’]t|is\s+not)\s+(?:clear|known|listed|given|specified)\b"
+    r"|\b(?:not|isn['’]t|aren['’]t)\s+(?:clear|obvious)\s+from\s+here\b|\bfrom\s+here\b"
+    r"|\b(?:it\s+seems|apparently|presumably|seemingly)\b", re.I)
+
+
+def _unsupported_city_claim(text: str, location: dict | None) -> bool:
+    """Reject placing the reader in the commute city (or "the office") unless LOCATION does."""
+    location = location or {}
+    commute_city = profile.get()["commute"].get("city")
+    if location.get("status") == "away" and location.get("place") == commute_city:
+        return False
+    names = [re.escape(n) for n in _city_names()] + [r"the\s+city", r"(?:the\s+)?office"]
+    pattern = rf"\b(?:in|into|to|at)\s+(?:{'|'.join(names)})\b|\b(?:office|city|in-office)\s+day\b"
+    if re.search(pattern, text, re.I):
+        return True
+    if commute_city and location.get("status") != "away":
+        # "New York day", "a New York Monday": any naming of the city as the day's setting.
+        city_words = "|".join(re.escape(n) for n in [commute_city, *(profile.get()["commute"].get("city_aliases") or [])])
+        if re.search(rf"\b(?:{city_words})\s+(?:day|monday|tuesday|wednesday|thursday|friday)\b", text, re.I):
+            return True
+    return False
+
+
 def _commute_claim(text: str) -> bool:
     """The opening never discusses the commute: generic transit words, or the configured
     transit lines and stop names, mean the draft is rejected."""
@@ -527,6 +589,8 @@ def validate_opening(text, *, calendar_events=None, weather_data=None, reminders
         location = derive_location(calendar_events, weather_data)
     if (_unsupported_claim(text, calendar_events or [], weather_data)
             or _unsupported_home_claim(text, location)
+            or _unsupported_city_claim(text, location)
+            or _HEDGE.search(text)
             or _commute_claim(text)
             or _LOCATION_ECHO.search(text)
             or _invented_reminder(text, reminders, calendar_events or [])
