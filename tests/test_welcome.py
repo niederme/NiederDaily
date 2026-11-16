@@ -525,6 +525,48 @@ def test_prompt_tells_model_not_to_echo_unknown_location(mocker):
     call, _ = _prompt_for(mocker, calendar_events=EVENTS)
     assert "never say that the location is unknown" in call["system"]
 
+# --- Busy days: parts of day, not clock times, and logged rejection reasons ---
+
+BUSY_DAY = [
+    {"time": "9:40am", "title": "Dentist appointment", "calendar": "Home", "all_day": False},
+    {"time": "11:00am", "title": "School play", "calendar": "Home", "all_day": False},
+    {"time": "12:00pm", "title": "Lunch with Alex", "calendar": "Home", "all_day": False},
+    {"time": "1:00pm", "title": "Memorial service", "calendar": "Home", "all_day": False},
+    {"time": "4:00pm", "title": "Potluck dinner", "calendar": "Home", "all_day": False},
+]
+
+
+def test_prompt_gives_parts_of_day_instead_of_clock_times(mocker):
+    call, _ = _prompt_for(mocker, calendar_events=BUSY_DAY)
+    prompt = call["messages"][0]["content"]
+    for label in ("9:40am", "11:00am", "12:00pm", "1:00pm", "4:00pm"):
+        assert label not in prompt
+    assert "Dentist appointment (morning;" in prompt
+    assert "Lunch with Alex (midday;" in prompt
+    assert "Potluck dinner (afternoon;" in prompt
+
+
+@pytest.mark.parametrize("label, part", [
+    ("12:30am", "overnight"), ("6:00am", "morning"), ("11:59am", "morning"), ("12:00pm", "midday"),
+    ("1:00pm", "afternoon"), ("5:00pm", "evening"), ("11 pm", "evening"), (None, "time unknown"),
+])
+def test_part_of_day_buckets(label, part):
+    from modules.welcome import _part_of_day
+    assert _part_of_day(label) == part
+
+
+def test_rejected_drafts_are_logged_by_reason_without_their_text(mocker, caplog):
+    recital = "Dentist at 9:40am, the play at 11:00am, lunch at 12:00pm."
+    client = MagicMock()
+    client.messages.create.return_value = MagicMock(content=[MagicMock(text=recital)])
+    mocker.patch("modules.welcome.anthropic.Anthropic", return_value=client)
+    with caplog.at_level("INFO", logger="modules.welcome"):
+        assert welcome_block("sk-ant-test", weather_data=WEATHER, calendar_events=BUSY_DAY) is None
+    assert client.messages.create.call_count == 3
+    assert caplog.text.count("rejected: schedule_recital") == 3
+    assert "all 3 drafts were rejected" in caplog.text
+    assert "Dentist" not in caplog.text
+
 
 INVENTED_REMINDERS = {"today": [{"title": "ask Dr. Doshi for more Vyvanse", "due": "2026-11-16", "list": "Home"}],
                       "overdue": [{"title": "Check Salt", "due": "2026-11-13", "list": "Home"},
