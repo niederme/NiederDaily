@@ -113,7 +113,7 @@ def test_render_welcome_appears_in_header():
     assert "Today is fine." in html
     assert "font-style:italic" not in html
 
-def test_render_reminders_only_show_first_upcoming_day():
+def test_render_reminders_hide_future_days():
     reminders = {
         "overdue": [],
         "today": [],
@@ -128,9 +128,10 @@ def test_render_reminders_only_show_first_upcoming_day():
         weather=None, calendar=None, reminders=reminders, messages=None, photo=None, nyt=None
     )
     html = _html_from_message(msg)
-    assert "Call mom" in html
-    assert "Pick up Rx" in html
+    assert "Call mom" not in html
+    assert "Pick up Rx" not in html
     assert "UMAC uniforms" not in html
+    assert "All clear." in html
 
 
 def test_render_reminders_include_list_label_and_color():
@@ -265,12 +266,13 @@ def test_reminders_render_as_checkbox_rows_under_list_headings():
         weather=None, calendar=None, reminders=reminders, messages=None, photo=None, nyt=None)
     html = _html_from_message(msg)
     assert html.count('class="reminder-list"') == 2
-    assert html.index('class="reminder-list">Niedertodo') < html.index("Return books") < html.index("Call accountant")
-    assert html.index("Call accountant") < html.index('class="reminder-list">Little York') < html.index("Order heating oil")
+    assert html.index('class="reminder-list">Niedertodo') < html.index("Return books")
+    assert html.index("Return books") < html.index('class="reminder-list">Little York') < html.index("Order heating oil")
+    assert "Call accountant" not in html
     assert 'border-color:#c27be3' in html
     assert '<span class="reminder-status reminder-overdue">Overdue</span>' in html
     assert '<span class="reminder-status">Today</span>' in html
-    assert '<span class="reminder-status">Tue</span>' in html
+    assert '<span class="reminder-status">Tue</span>' not in html
 
 
 def test_reminders_grouped_by_list_in_preferred_order():
@@ -288,7 +290,8 @@ def test_reminders_grouped_by_list_in_preferred_order():
     msg = render_email(recipient="me@example.com", welcome=None,
         weather=None, calendar=None, reminders=reminders, messages=None, photo=None, nyt=None)
     html = _html_from_message(msg)
-    order = ["Book flights", "Renew passport", "Order heating oil", "Pay invoice", "Loose end"]
+    order = ["Book flights", "Order heating oil", "Pay invoice", "Loose end"]
+    assert "Renew passport" not in html
     positions = [html.index(t) for t in order]
     assert positions == sorted(positions)
 
