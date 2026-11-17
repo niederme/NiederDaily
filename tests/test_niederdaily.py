@@ -14,6 +14,7 @@ def test_modules_run_in_correct_order(mocker):
     mocker.patch("modules.photo.photo_block", return_value=None)
     mocker.patch("modules.nyt.nyt_block", return_value=None)
     mocker.patch("modules.tweet.tweet_block", return_value=None)
+    mocker.patch("modules.parcel_api.live_packages_block", return_value=None)
     mocker.patch("renderer.render_email", return_value=MagicMock())
     mocker.patch("sender.send_email", return_value=True)
     mocker.patch("config.load_config", return_value={
@@ -38,6 +39,7 @@ def test_failed_module_does_not_crash_run(mocker):
     mocker.patch("modules.photo.photo_block", return_value=None)
     mocker.patch("modules.nyt.nyt_block", return_value=None)
     mocker.patch("modules.tweet.tweet_block", return_value=None)
+    mocker.patch("modules.parcel_api.live_packages_block", return_value=None)
     mocker.patch("renderer.render_email", return_value=MagicMock())
     mocker.patch("sender.send_email", return_value=True)
     mocker.patch("config.load_config", return_value={

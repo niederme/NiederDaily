@@ -37,7 +37,7 @@ The easiest Mac setup is a single `Run Shell Script` action.
 Use this script:
 
 ```bash
-/Users/niederme/~Repos/NiederDaily/.venv/bin/python /Users/niederme/~Repos/NiederDaily/setup/open_niederdaily_item.py
+"$HOME/Repos/NiederDaily/.venv/bin/python" "$HOME/Repos/NiederDaily/setup/open_niederdaily_item.py"
 ```
 
 Set:

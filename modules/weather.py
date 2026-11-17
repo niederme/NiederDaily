@@ -205,6 +205,39 @@ def _is_geocodable(location_str: str) -> bool:
     return True
 
 
+def _matches_explicit_geography(location_str: str, address: dict) -> bool:
+    """Reject an ambiguous geocoder hit that contradicts a written country/state."""
+    parts = [part.strip().casefold() for part in location_str.split(",")]
+    country_aliases = {"united states": "us", "usa": "us", "us": "us", "canada": "ca"}
+    country_hint = next((country_aliases[p] for p in reversed(parts) if p in country_aliases), None)
+    region_hint = next((p for p in reversed(parts) if re.fullmatch(r"[a-z]{2}", p)
+                        and p != "us"), None)
+    result_country = str(address.get("country_code") or "").casefold()
+    if not result_country:
+        result_country = country_aliases.get(str(address.get("country") or "").casefold(), "")
+    if country_hint and result_country and result_country != country_hint:
+        return False
+    result_region = str(
+        address.get("state_code") or address.get("ISO3166-2-lvl4") or ""
+    ).casefold().rsplit("-", 1)[-1]
+    if region_hint and result_region != region_hint:
+        return False
+    # A result with neither field cannot substantiate an explicit country.
+    if country_hint and not result_country and not result_region:
+        return False
+    # A final written place name can be a state/province or country. It must
+    # agree with one of those fields when the geocoder provides them.
+    tail = parts[-1] if parts else ""
+    if len(parts) > 1 and re.fullmatch(r"[a-z][a-z ]{2,}", tail):
+        result_names = {
+            str(address.get("state") or "").casefold(),
+            str(address.get("country") or "").casefold(),
+        }
+        if tail not in result_names and country_aliases.get(tail) != result_country and (result_names - {""}):
+            return False
+    return True
+
+
 def geocode_location(location_str: str) -> dict | None:
     if not _is_geocodable(location_str):
         return None
@@ -218,6 +251,8 @@ def geocode_location(location_str: str) -> dict | None:
             return None
         r = results[0]
         addr = r.get("address", {})
+        if not _matches_explicit_geography(location_str, addr):
+            return None
         city = (
             addr.get("city")
             or addr.get("town")

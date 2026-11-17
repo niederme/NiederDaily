@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-13",
+  "calendar": [
+    {"time": "6:32am", "title": "BusLine 500 Inbound", "location": "Testville, PA, United States", "calendar": "Personal", "all_day": false},
+    {"time": "6:34am", "title": "RailCo 196 Inbound", "location": "Sampleton, PA, United States", "calendar": "Personal", "all_day": false},
+    {"time": "6:54am", "title": "RailCo 50 Inbound", "location": "Exampleburg, PA, United States", "calendar": "Personal", "all_day": false},
+    {"time": "6:59am", "title": "RailCo 196 Inbound", "location": "Sampleton, PA, United States", "calendar": "Personal", "all_day": false},
+    {"time": "7:10am", "title": "RailCo 52 Inbound", "location": "Exampleburg, PA, United States", "calendar": "Personal", "all_day": false},
+    {"time": "8:01am", "title": "RailCo 3710 Inbound", "location": "Junction Town, NJ, United States", "calendar": "Personal", "all_day": false},
+    {"time": "12:00pm", "title": "Team lunch", "location": "New York, NY, United States", "calendar": "Personal", "all_day": false},
+    {"time": "4:30pm", "title": "Planning meeting", "location": "New York, NY, United States", "calendar": "Personal", "all_day": false}
+  ],
+  "reminders": {
+    "today": [{"title": "Dentist at 9:00am", "list": "Personal", "due": "2026-10-13"}],
+    "overdue": [],
+    "upcoming": []
+  }
+}

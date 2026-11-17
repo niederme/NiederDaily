@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "source": "parcel_cache",
+  "generated_at": "2026-10-09T18:00:00.000Z",
+  "freshness": "fresh",
+  "as_of": "2026-10-09T17:55:00.000Z",
+  "cache_age_seconds": 300,
+  "fresh_for_seconds": 7200,
+  "max_age_seconds": 86400,
+  "reason": null,
+  "total_cached": 2,
+  "truncated": false,
+  "coverage": {
+    "scope": "recent_and_active_cache",
+    "complete": true,
+    "returned_count": 2,
+    "unlabeled_count": 1,
+    "unknown_status_count": 0,
+    "counts_scope": "returned_shipments",
+    "active_cached_count": 2,
+    "active_membership_unknown_count": 0,
+    "can_state_no_active": false
+  },
+  "shipments": [
+    {
+      "shipment_id": "301cf6420643e4333e62e82cc42316658ff86b93dfda3dc69276aba7035609ce",
+      "carrier_code": "fedex",
+      "status": "exception",
+      "status_code": 7,
+      "is_active": true,
+      "company": null,
+      "item": null,
+      "label_source": null
+    },
+    {
+      "shipment_id": "f87b6c889078a1855b2c9cd6282117b71702ebfbd625b6af82db5e4b8d5421c5",
+      "carrier_code": "ups",
+      "status": "out_for_delivery",
+      "status_code": 4,
+      "is_active": true,
+      "company": "Example Shop",
+      "item": "Raincoat",
+      "label_source": "trusted_validated_ingest"
+    }
+  ]
+}

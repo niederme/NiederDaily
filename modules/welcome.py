@@ -3,6 +3,7 @@ from __future__ import annotations
 import anthropic
 import json
 from datetime import date
+import logging
 import re
 
 from modules.calendar import dedupe_events, is_commute_hold, is_transit_option
@@ -10,6 +11,8 @@ from modules.day_location import derive_location, is_day_marker, location_line
 from modules.opening_history import filter_for_prompt
 from modules import profile
 from modules.opening_safety import calendar_kind, opening_rejection, package_context
+
+log = logging.getLogger(__name__)
 
 _BASE_PROMPT = (
     "Write a short editorial read on the day ahead for {display_name}. "
@@ -268,6 +271,26 @@ def _unsupported_claim(text: str, calendar_events: list, weather_data: dict | No
     return False
 
 
+_TIME_LABEL = re.compile(r"^\s*(\d{1,2})(?::(\d{2}))?\s*([ap])\.?m\.?\s*$", re.I)
+
+
+def _part_of_day(label: str | None) -> str:
+    """Coarse slot for a calendar time label like '9:40am'; never a clock time."""
+    match = _TIME_LABEL.match(label or "")
+    if not match:
+        return "time unknown"
+    hour = int(match[1]) % 12 + (12 if match[3].lower() == "p" else 0)
+    if hour < 5:
+        return "overnight"
+    if hour < 12:
+        return "morning"
+    if hour < 13:
+        return "midday"
+    if hour < 17:
+        return "afternoon"
+    return "evening"
+
+
 def welcome_block(
     api_key: str,
     weather_data: dict | None,
@@ -316,11 +339,14 @@ def welcome_block(
                 event_lines = []
                 for event in ordered[:6]:
                     priority = "ROUTINE" if _is_routine_event(event) else "CANDIDATE"
-                    when = "all day" if event.get("all_day") else event.get("time", "time unknown")
+                    # Part of day, not the clock: given exact times the model recites the
+                    # schedule and the clock-time guard rejects every draft. The Calendar
+                    # section right below carries the times.
+                    when = "all day" if event.get("all_day") else _part_of_day(event.get("time"))
                     kind = calendar_kind(event)
                     if kind == "delivery":
                         # Parcel's start alone is never a pickup appointment or exact ETA.
-                        when = (f"estimated window {when}–{event['end_time']}"
+                        when = (f"estimated window {event.get('time')}–{event['end_time']}"
                                 if event.get("end_time") else "delivery timing not established")
                         if location["status"] == "away":
                             # Restated windows trip the exact-time guard; the reader is out anyway.
@@ -420,20 +446,25 @@ def welcome_block(
 
         client = anthropic.Anthropic(api_key=api_key)
         # The guards fail closed; a fresh draft usually avoids the rejected phrasing.
-        for _ in range(OPENING_ATTEMPTS):
+        for attempt in range(1, OPENING_ATTEMPTS + 1):
             response = client.messages.create(
                 model=OPENING_MODEL,
                 max_tokens=320,
                 system=system_prompt(),
                 messages=[{"role": "user", "content": user_prompt}],
             )
-            result = validate_opening(response.content[0].text.strip(), calendar_events=calendar_events,
-                                      weather_data=weather_data, reminders=reminders,
-                                      packages=packages, location=location)
-            if result:
-                return result
+            text = response.content[0].text.strip()
+            reason = opening_rejection_reason(text, calendar_events=calendar_events,
+                                              weather_data=weather_data, reminders=reminders,
+                                              packages=packages, location=location)
+            if reason is None:
+                return _normalize_paragraphs(text)
+            # Reason codes only, never draft text: the log is not private.
+            log.info("Opening draft %d/%d rejected: %s", attempt, OPENING_ATTEMPTS, reason)
+        log.warning("Opening omitted: all %d drafts were rejected.", OPENING_ATTEMPTS)
         return None
-    except Exception:
+    except Exception as exc:
+        log.warning("Opening omitted: generation failed (%s).", type(exc).__name__)
         return None
 
 
@@ -580,23 +611,40 @@ def _normalize_paragraphs(text: str) -> str:
     return "\n\n".join(paragraphs)
 
 
+def opening_rejection_reason(text, *, calendar_events=None, weather_data=None, reminders=None,
+                             packages=None, location=None) -> str | None:
+    """Name the first guard a draft trips (a non-private code), or None if it passes."""
+    if not isinstance(text, str) or not text.strip():
+        return "empty"
+    if location is None:
+        location = derive_location(calendar_events, weather_data)
+    if _unsupported_claim(text, calendar_events or [], weather_data):
+        return "unsupported_claim"
+    if _unsupported_home_claim(text, location):
+        return "home_claim"
+    if _unsupported_city_claim(text, location):
+        return "city_claim"
+    if _HEDGE.search(text):
+        return "hedge"
+    if _commute_claim(text):
+        return "commute"
+    if _LOCATION_ECHO.search(text):
+        return "location_echo"
+    if _invented_reminder(text, reminders, calendar_events or []):
+        return "invented_reminder"
+    if _named_reminder_count(text, reminders, calendar_events or []) > 1:
+        return "too_many_reminders"
+    if _NAG_CLAIM.search(text):
+        return "nag"
+    if len(_CLOCK_TIME.findall(text)) >= 3:
+        return "schedule_recital"
+    return opening_rejection(text, calendar_events or [], reminders, packages)
+
+
 def validate_opening(text, *, calendar_events=None, weather_data=None, reminders=None,
                      packages=None, location=None):
     """Fail closed for recognized unsupported claims; not a general fact checker."""
-    if not isinstance(text, str) or not text.strip():
-        return None
-    if location is None:
-        location = derive_location(calendar_events, weather_data)
-    if (_unsupported_claim(text, calendar_events or [], weather_data)
-            or _unsupported_home_claim(text, location)
-            or _unsupported_city_claim(text, location)
-            or _HEDGE.search(text)
-            or _commute_claim(text)
-            or _LOCATION_ECHO.search(text)
-            or _invented_reminder(text, reminders, calendar_events or [])
-            or _named_reminder_count(text, reminders, calendar_events or []) > 1
-            or _NAG_CLAIM.search(text)
-            or len(_CLOCK_TIME.findall(text)) >= 3
-            or opening_rejection(text, calendar_events or [], reminders, packages)):
+    if opening_rejection_reason(text, calendar_events=calendar_events, weather_data=weather_data,
+                                reminders=reminders, packages=packages, location=location):
         return None
     return _normalize_paragraphs(text)

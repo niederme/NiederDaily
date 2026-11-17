@@ -120,7 +120,8 @@ def test_package_noun_does_not_join_same_merchant_pickup():
 def test_orchestrator_passes_reminders_and_skips_messages(mocker):
     app = importlib.import_module("niederdaily")
     mocker.patch.object(app.cfg, "load_config", return_value={"anthropic_api_key": "fake", "recipient_email": "preview@example.invalid"})
-    for name in ("weather_block", "calendar_block", "photo_block", "tweet_block", "nyt_block"):
+    for name in ("weather_block", "calendar_block", "photo_block", "tweet_block", "nyt_block",
+                 "live_packages_block"):
         mocker.patch.object(app, name, return_value=None)
     mocker.patch.object(app, "reminders_block", return_value=REMINDERS)
     messages = mocker.patch.object(app, "messages_block", side_effect=AssertionError("Messages must not run"))
@@ -131,3 +132,63 @@ def test_orchestrator_passes_reminders_and_skips_messages(mocker):
     assert welcome.call_args.kwargs["reminders"] == REMINDERS
     messages.assert_not_called()
     send.assert_called_once()
+
+
+# --- A package in transit must not taint unrelated sentences ---
+
+IN_TRANSIT = {"freshness": "fresh", "shipments": [{"company": "Example Store", "item": "", "carrier_code": "carrier",
+              "status": "in transit", "expected_delivery": {"date": "2026-11-18", "time": None,
+                                                              "end_date": None, "end_time": None, "timezone": None}}]}
+
+
+@pytest.mark.parametrize("text", [
+    "The school play is at 11 this morning.",  # "11" came from the estimate's date, 2026-11-18
+    "Leave some time for the play at 11.",  # "time" came from the estimate dict's keys
+    "The game is on tonight; catch it at 8 if you are back.",  # bare "it" with no package named
+    "The morning starts with an urgent care visit at 9:40.",  # "visit" is not a package errand
+])
+def test_package_in_transit_does_not_reject_unrelated_sentences(text):
+    assert validate_opening(text, packages=IN_TRANSIT) == text
+
+
+@pytest.mark.parametrize("text", [
+    "Your Example Store package arrives at 2pm.",
+    "A package is coming. It lands at 2pm.",  # the pronoun follows a sentence naming the package
+    "Visit Example Store for the package.",
+    "The pickups anchor the afternoon.",  # pickup wording still fails closed without a package named
+])
+def test_package_claims_still_rejected(text):
+    assert validate_opening(text, packages=IN_TRANSIT) is None
+
+
+@pytest.mark.parametrize("text", [
+    "Both fit in the margins of a busy day.",
+    "The school play is a highlight, not a casual errand.",
+])
+def test_soft_errand_wording_without_a_package_is_allowed(text):
+    assert validate_opening(text, packages=IN_TRANSIT) == text
+
+
+# --- Several reminders in one sentence ---
+
+TODAY_REMINDERS = {"today": [{"title": "Call a relative", "list": "Personal", "due": "2026-11-14"},
+                             {"title": "Talk to Alex about Thursday's schedule", "list": "Personal", "due": "2026-11-14"},
+                             {"title": "Water the plants", "list": "Personal", "due": "2026-11-14"}]}
+
+
+@pytest.mark.parametrize("text", [
+    "Call a relative when you can, and talk to Alex about Thursday's schedule.",
+    "A few things on the list: calling a relative, watering the plants, and Thursday's schedule with Alex.",
+    "Water the plants after the urgent care stop.",  # a place, not urgency
+])
+def test_listing_several_reminders_keeps_their_own_actions(text):
+    # The action check alone accepts these; the opening as a whole now allows one reminder.
+    assert opening_rejection(text, [], TODAY_REMINDERS, None) is None
+
+
+@pytest.mark.parametrize("text", [
+    "Water the plants and order a new pot.",  # no reminder says order
+    "Calling a relative is urgent today.",
+])
+def test_reminder_inventions_still_rejected_in_lists(text):
+    assert validate_opening(text, reminders=TODAY_REMINDERS) is None
