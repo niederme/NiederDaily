@@ -91,7 +91,7 @@ def system_prompt() -> str:
     )
 
 
-OPENING_ATTEMPTS = 3
+OPENING_ATTEMPTS = 4
 OPENING_MODEL = "claude-haiku-4-5-20251001"
 
 
@@ -304,6 +304,12 @@ _RETRY_NOTES = {
     "too_many_reminders": "it named more than one reminder. Name at most the one REMINDER given",
     "nag": "it said how long something has waited. Do not",
     "schedule_recital": "it listed clock times. Use no clock times",
+    "reminder_inferred_urgency": "it judged a reminder's urgency (urgent, not urgent, soon, on the horizon). Just name it",
+    "reminder_inferred_age": "it said how old a reminder is. Do not",
+    "reminder_changed_action": "it changed what a reminder asks (a check is not a call or an order). Use its own action",
+    "delivery_exact_time": "it gave a delivery time. Give no delivery times",
+    "delivery_as_errand": "it treated a delivery as an errand. A delivery simply arrives",
+    "pickup": "it called a delivery a pickup. It is not",
     "unsupported_claim": "it stated something the inputs do not support (a trip, flight, appointment, "
                          "payment, or time). Stick to what the inputs say",
 }
@@ -524,7 +530,7 @@ def welcome_block(
 
 _COMMUTE_WORDS = re.compile(
     r"\b(?:(?<!school )bus(?:es)?|trains?|commut\w*|park[- ](?:and|&)[- ]ride|p&r|"
-    r"bus\s+terminal|station|shuttl\w*|ride\s+home)\b", re.I)
+    r"bus\s+terminal|(?:bus|train|rail|subway|transit|the)\s+station|shuttl\w*|ride\s+home)\b", re.I)
 # "The X check is on the list": the task named must be one of the day's reminders.
 _LIST_CLAIM = re.compile(
     r"\b(?:the|your|a)\s+(?P<a>[\w’'.& -]{2,40}?)\s+(?:check|reminder|task|to-?do)\b"
@@ -563,15 +569,18 @@ def _invented_reminder(text: str, reminders: dict | None, calendar_events: list)
     return False
 
 
+# How drafts talk about deliveries; never evidence of a reminder.
+_DELIVERY_WORDS = {"packa", "deliv", "arriv", "expec", "excep", "tomor", "shipm", "track"}
 _GENERIC_REMINDER_WORDS = {"check", "night", "today", "call", "make", "more", "about", "with", "from",
                            "calen", "sched", "remin", "order", "renew", "minim"}
 
 
-def _named_reminder_count(text: str, reminders: dict | None, calendar_events: list) -> int:
+def _named_reminder_count(text: str, reminders: dict | None, calendar_events: list,
+                          packages: dict | None = None) -> int:
     """How many distinct reminders a draft names, by words only that reminder has.
 
-    Words shared by two reminders, words found in the day's event titles, and generic
-    task words never count, so one mention is never counted twice.
+    Words shared by two reminders, words found in the day's event titles or package rows,
+    and generic task words never count, so one mention is never counted twice.
     """
     if not isinstance(reminders, dict):
         return 0
@@ -584,6 +593,9 @@ def _named_reminder_count(text: str, reminders: dict | None, calendar_events: li
     event_words = set()
     for event in calendar_events or []:
         event_words |= _content_words(event.get("title"))
+    for row in package_context(packages):
+        event_words |= _content_words(" ".join(str(row.get(k) or "") for k in ("company", "item", "status")))
+    event_words |= _DELIVERY_WORDS
     seen = {}
     for w in words:
         for x in w:
@@ -616,7 +628,10 @@ _HEDGE = re.compile(
     r"\bsomewhere\s+in\s+(?:the\s+)?(?:middle|mix|there|between)\b"
     r"|\b(?:specifics|details|timing|times?)\s+(?:aren['’]t|are\s+not|isn['’]t|is\s+not)\s+(?:clear|known|listed|given|specified)\b"
     r"|\b(?:not|isn['’]t|aren['’]t)\s+(?:clear|obvious)\s+from\s+here\b|\bfrom\s+here\b"
-    r"|\b(?:it\s+seems|apparently|presumably|seemingly)\b", re.I)
+    r"|\b(?:it\s+seems|apparently|presumably|seemingly)\b"
+    r"|\b(?:specifics|details?|timing|times?)\s+(?:aren['’]t|are\s+not|isn['’]t|is\s+not)\s+(?:yet\s+|entirely\s+|quite\s+)?(?:clear|known|listed|given|specified|set)\b"
+    r"|\black(?:s|ing)?\s+(?:clear\s+|much\s+|any\s+)?details?\b|\bunclear\s+details?\b"
+    r"|\b(?:evening|day|afternoon|morning|schedule|night)\s+(?:remains?|stays?|is|looks)\s+(?:wide\s+|fairly\s+)?open\b", re.I)
 
 
 def _unsupported_city_claim(text: str, location: dict | None) -> bool:
@@ -686,7 +701,7 @@ def opening_rejection_reason(text, *, calendar_events=None, weather_data=None, r
         return "location_echo"
     if _invented_reminder(text, reminders, calendar_events or []):
         return "invented_reminder"
-    if _named_reminder_count(text, reminders, calendar_events or []) > 1:
+    if _named_reminder_count(text, reminders, calendar_events or [], packages) > 1:
         return "too_many_reminders"
     if _NAG_CLAIM.search(text):
         return "nag"
