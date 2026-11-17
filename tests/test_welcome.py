@@ -713,3 +713,32 @@ def test_prompt_forbids_assuming_away_and_hedging():
     assert "Never assume Jordan is away either" in text
     assert "never hedge" in text
     assert "office day" not in text.split("Work meetings are context")[1]
+
+
+def test_retries_name_the_rejection_and_rejected_drafts_stay_private(mocker, tmp_path, caplog):
+    client = MagicMock()
+    client.messages.create.side_effect = [
+        MagicMock(content=[MagicMock(text="An office day in Boston with one review.")]),
+        MagicMock(content=[MagicMock(text="A workday with one review.")]),
+    ]
+    mocker.patch("modules.welcome.anthropic.Anthropic", return_value=client)
+    path = tmp_path / "state" / "rejections.jsonl"
+    with caplog.at_level("INFO"):
+        result = welcome_block("sk-ant-test", weather_data=WEATHER, calendar_events=EVENTS,
+                               rejections_path=path)
+    assert result == "A workday with one review."
+    first, second = (c.kwargs["messages"][0]["content"] for c in client.messages.create.call_args_list)
+    assert "REWRITE NOTE" not in first
+    assert "REWRITE NOTE" in second and "without any place" in second
+    saved = path.read_text()
+    assert "city_claim" in saved and "office day in Boston" in saved
+    assert (path.stat().st_mode & 0o777) == 0o600
+    assert "office day in Boston" not in caplog.text and "city_claim" in caplog.text
+
+
+def test_unavailable_calendar_is_not_called_empty(mocker):
+    client = MagicMock()
+    client.messages.create.return_value = MagicMock(content=[MagicMock(text="A quiet day.")])
+    mocker.patch("modules.welcome.anthropic.Anthropic", return_value=client)
+    welcome_block("sk-ant-test", weather_data=WEATHER, calendar_events=None)
+    assert "CALENDAR: unavailable" in client.messages.create.call_args.kwargs["messages"][0]["content"]

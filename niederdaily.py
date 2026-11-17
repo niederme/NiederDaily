@@ -86,7 +86,10 @@ def run(config_path: str = None, as_of=None, parcel_snapshot_path: str = None,
                     nyt_stories=nyt, photo=photo, messages=messages, tweet=tweet,
                     reminders=reminders, packages=packages,
                     mention_history=mention_history,
-                    as_of=as_of)
+                    as_of=as_of,
+                    # Private local diagnosis of rejected drafts; the log only gets reason codes.
+                    rejections_path=conf.get("opening_rejections_path")
+                    or Path.home() / ".niederdaily" / "state" / "opening_rejections.jsonl")
 
     msg = render_email(
         recipient=conf["recipient_email"],
