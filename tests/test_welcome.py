@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import MagicMock
 
 from modules import profile
-from modules.welcome import validate_opening, welcome_block
+from modules.welcome import OPENING_ATTEMPTS, validate_opening, welcome_block
 
 # A made-up reader. Real conventions live only in ~/.niederdaily/config.json.
 PROFILE = {
@@ -562,9 +562,9 @@ def test_rejected_drafts_are_logged_by_reason_without_their_text(mocker, caplog)
     mocker.patch("modules.welcome.anthropic.Anthropic", return_value=client)
     with caplog.at_level("INFO", logger="modules.welcome"):
         assert welcome_block("sk-ant-test", weather_data=WEATHER, calendar_events=BUSY_DAY) is None
-    assert client.messages.create.call_count == 3
-    assert caplog.text.count("rejected: schedule_recital") == 3
-    assert "all 3 drafts were rejected" in caplog.text
+    assert client.messages.create.call_count == OPENING_ATTEMPTS
+    assert caplog.text.count("rejected: schedule_recital") == OPENING_ATTEMPTS
+    assert f"all {OPENING_ATTEMPTS} drafts were rejected" in caplog.text
     assert "Dentist" not in caplog.text
 
 
@@ -761,3 +761,29 @@ def test_memory_photo_does_not_clobber_the_location_fact(mocker, tmp_path, photo
                            rejections_path=path)
     assert result == "You're in Boston today, with one review."
     assert '"location": "away"' in path.read_text()
+
+
+def test_named_places_with_station_are_not_commute_talk():
+    swim = [{"time": "6:00pm", "title": "Swim practice", "calendar": "Home", "all_day": False}]
+    assert validate_opening("The evening has swim at Swim Station.", calendar_events=swim)
+    assert validate_opening("You'll pass through the station tonight.", calendar_events=swim) is None
+
+
+def test_more_hedges_are_rejected():
+    for text in ("Two entries lack clear detail.", "Their details aren't yet clear.",
+                 "The evening remains open."):
+        assert validate_opening(text, calendar_events=EVENTS) is None, text
+
+
+def test_package_words_do_not_count_as_a_second_reminder():
+    reminders = {"today": [{"title": "Order heartworm pills", "list": "Todo"},
+                           {"title": "Contact the delivery desk", "list": "Todo"}], "overdue": [], "upcoming": []}
+    packages = {"freshness": "fresh", "shipments": [{"company": "Shop", "item": "storage container",
+                                                     "status": "delivery exception"}]}
+    text = "Heartworm pills are on the list. A storage container hit a delivery exception."
+    assert validate_opening(text, calendar_events=EVENTS, reminders=reminders, packages=packages)
+
+
+def test_retry_note_covers_reminder_urgency():
+    from modules.welcome import _retry_note
+    assert "urgency" in _retry_note(["reminder_inferred_urgency"])
