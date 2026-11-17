@@ -742,3 +742,22 @@ def test_unavailable_calendar_is_not_called_empty(mocker):
     mocker.patch("modules.welcome.anthropic.Anthropic", return_value=client)
     welcome_block("sk-ant-test", weather_data=WEATHER, calendar_events=None)
     assert "CALENDAR: unavailable" in client.messages.create.call_args.kwargs["messages"][0]["content"]
+
+
+@pytest.mark.parametrize("photo_place", ["", "Lisbon, Portugal"])
+def test_memory_photo_does_not_clobber_the_location_fact(mocker, tmp_path, photo_place):
+    # A memory photo's place once overwrote the day's LOCATION, so every guard saw
+    # "unknown" and rejected a correct "You're in Boston today" on a marked city day.
+    client = MagicMock()
+    client.messages.create.side_effect = [
+        MagicMock(content=[MagicMock(text="It seems a city day.")]),
+        MagicMock(content=[MagicMock(text="You're in Boston today, with one review.")]),
+    ]
+    mocker.patch("modules.welcome.anthropic.Anthropic", return_value=client)
+    marked = EVENTS + [{"time": None, "title": "JD: BOS", "calendar": "Home", "all_day": True}]
+    photo = (b"img", {"year": "2019", "location": photo_place, "description": "A street."})
+    path = tmp_path / "rejections.jsonl"
+    result = welcome_block("sk-ant-test", weather_data=WEATHER, calendar_events=marked, photo=photo,
+                           rejections_path=path)
+    assert result == "You're in Boston today, with one review."
+    assert '"location": "away"' in path.read_text()

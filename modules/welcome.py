@@ -465,10 +465,11 @@ def welcome_block(
         if photo:
             _, meta = photo
             year = meta.get("year", "")
-            location = meta.get("location", "")
+            # Not `location`: that name holds the day's LOCATION fact the guards check.
+            photo_place = meta.get("location", "")
             desc = meta.get("description", "")
             fav = " ★" if meta.get("is_favorite") else ""
-            loc_part = f", {location}" if location else ""
+            loc_part = f", {photo_place}" if photo_place else ""
             if desc:
                 parts.append(f"MEMORY PHOTO ({year}{loc_part}{fav}): {desc}")
             elif year:
