@@ -288,29 +288,19 @@ def _reminder_group_key(list_name: str | None) -> tuple:
 def _reminders_html(data: dict, *, show_rule: bool = True) -> str:
     """Reminders grouped by list: a caps list heading, then one row per
     reminder with a hollow circle in the list color, the title, and a
-    right-aligned status (Overdue in red, Today, or the weekday)."""
+    right-aligned status (Overdue in red, or Today). Reminders due on a
+    later day are not shown."""
     items = []  # (list_name, list_color, title, status_html, payload)
     for r in data.get("overdue", []):
         items.append((r, '<span class="reminder-status reminder-overdue">Overdue</span>'))
     for r in data.get("today", []):
         items.append((r, '<span class="reminder-status">Today</span>'))
-    next_day = None
-    for r in data.get("upcoming", []):
-        due_raw = r.get("due")
-        if next_day is None:
-            next_day = due_raw
-        elif due_raw != next_day:
-            break
-        try:
-            from datetime import datetime
-            due = datetime.strptime(due_raw, "%Y-%m-%d").strftime("%a")
-        except Exception:
-            due = due_raw or ""
-        items.append((r, f'<span class="reminder-status">{_esc(due)}</span>'))
+    # Reminders due on a later day stay out of the email: only what is
+    # overdue or due today is listed.
     if not items:
         return _section("Reminders", '<div class="supporting">All clear.</div>', show_rule=show_rule)
 
-    # Stable sort keeps overdue -> today -> upcoming order within each list.
+    # Stable sort keeps overdue -> today order within each list.
     items.sort(key=lambda item: _reminder_group_key(item[0].get("list")))
     groups: list[tuple[str, list[str]]] = []
     for r, status_html in items:
