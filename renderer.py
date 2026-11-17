@@ -391,7 +391,16 @@ def _tweet_html(tweet: dict, *, show_rule: bool = True) -> str:
     source = tweet.get("source")
     year = tweet.get("year") or ""
     if source == "authored":
-        heading = f"You Tweeted · {year}" if year else "You Tweeted"
+        heading = "You Tweeted"
+        try:
+            years_ago = date.today().year - int(year)
+        except (TypeError, ValueError):
+            years_ago = None
+        if years_ago is not None and years_ago >= 1:
+            unit = "year" if years_ago == 1 else "years"
+            heading = f"You Tweeted · {years_ago} {unit} ago"
+        elif year:
+            heading = f"You Tweeted · {year}"
     elif source == "bookmarked":
         heading = "From Your Bookmarks"
     else:

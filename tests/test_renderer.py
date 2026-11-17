@@ -185,7 +185,9 @@ def test_render_includes_authored_tweet():
         tweet=TWEET_AUTHORED,
     )
     html = _html_from_message(msg)
-    assert "You Tweeted · 2021" in html
+    years = date.today().year - 2021
+    assert f"You Tweeted · {years} years ago" in html
+    assert "You Tweeted · 2021" not in html
     assert "Shipping beats perfect." in html
     assert "https://twitter.com/john/status/555" in html
 
@@ -316,3 +318,12 @@ def test_calendar_source_is_bold_in_its_calendar_color():
             '<span class="calendar-dot" style="background:#0088FF;"></span>Personal</span>') in html
     assert '<span class="calendar-source calendar-line" style="color:#6d7178;">Other</span>' in html
     assert ".calendar-source{display:inline-flex;align-items:center;gap:6px;font-weight:700;white-space:nowrap;}" in html
+
+
+def test_authored_tweet_heading_singular_and_fallback():
+    from renderer import _tweet_html
+    last_year = str(date.today().year - 1)
+    assert "You Tweeted · 1 year ago" in _tweet_html({**TWEET_AUTHORED, "year": last_year})
+    this_year = str(date.today().year)
+    assert f"You Tweeted · {this_year}" in _tweet_html({**TWEET_AUTHORED, "year": this_year})
+    assert "You Tweeted<" in _tweet_html({**TWEET_AUTHORED, "year": ""})
