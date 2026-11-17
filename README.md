@@ -214,6 +214,7 @@ The opening paragraph knows nothing about you until you tell it. Every personal 
 - `reminders_suppressed_titles`: reminders kept in Apple Reminders but left out of the newsletter. `reminder_title_overrides` clarifies a terse title in the newsletter only (optionally scoped to one list); the source reminder is never changed.
 - `commute`: the commute city and how to read its timetable. Events titled `<transit line> <number> Inbound|Outbound` are timetable options, not bookings: they never place you in the city on their own; on a day marked as a commute day they refine the departure and return. `depart` / `home` are the usual times used when the calendar has a commute-day marker but no timetable events. Commute details only decide where you are: the opening never mentions buses or trains, lines, stops, or departure and return times, and a draft that does (including any `transit_lines` or `arrival_stop` name) is rejected.
 - `opening_history_path`: where the opening records which reminders it mentioned, so the same item is not raised again for a week. Only a real daily send (not a `--date` run) reads or writes it.
+- `opening_rejections_path` (default `~/.niederdaily/state/opening_rejections.jsonl`): when the opening's checks reject a draft, the draft and the reason are kept here (owner-only, last 60) so a missing opening can be diagnosed. The shared log only records reason codes. Each retry tells the model why the earlier draft was rejected.
 
 ### 3. Add Gmail OAuth credentials
 

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import anthropic
 import json
-from datetime import date
+from datetime import date, datetime
 import logging
+import os
+from pathlib import Path
 import re
 
 from modules.calendar import dedupe_events, is_commute_hold, is_transit_option
@@ -45,7 +47,7 @@ _BASE_PROMPT = (
     "Mention weather only when it materially affects the day. "
     "Where {name} is comes only from the LOCATION line. Never assume {name} is home. Say or imply home only when LOCATION says home. "
     "Never assume {name} is away either: name a city, or say 'in the city', 'in the office', or 'an office day', only when LOCATION says away in that place. "
-    "Work meetings are often virtual; they never say where {name} is. "
+    "Work meetings are often virtual; they never say where {name} is. Unless LOCATION says away, call it a workday, never an office day, and do not say 'at the office', 'in the city', or 'in town'. "
     "When LOCATION says away, do not suggest home tasks, chores around the house, or being home for a delivery; a delivery simply arrives while {name} is out. "
     "Do not assume an evening game is watched at home when {name} gets back after it starts; if LOCATION is unknown, do not say where it is watched. "
     "When LOCATION is unknown, do not guess whereabouts, and never say that the location is unknown or unclear: just leave it out. "
@@ -291,6 +293,46 @@ def _part_of_day(label: str | None) -> str:
     return "evening"
 
 
+_RETRY_NOTES = {
+    "city_claim": "it placed {name} in a city or at the office. LOCATION does not say {name} is there: "
+                  "describe the workday without any place (no city, no 'office', no 'in town')",
+    "hedge": "it hedged about missing details. State what the inputs say and leave out the rest",
+    "home_claim": "it placed {name} at home, which LOCATION does not say",
+    "commute": "it mentioned the commute or transit. Leave travel out entirely",
+    "location_echo": "it commented on where {name} is or on missing times. Say nothing about that",
+    "invented_reminder": "it named a task that is not in the reminders. Name none or only the REMINDER given",
+    "too_many_reminders": "it named more than one reminder. Name at most the one REMINDER given",
+    "nag": "it said how long something has waited. Do not",
+    "schedule_recital": "it listed clock times. Use no clock times",
+    "unsupported_claim": "it stated something the inputs do not support (a trip, flight, appointment, "
+                         "payment, or time). Stick to what the inputs say",
+}
+
+
+def _retry_note(reasons: list[str]) -> str:
+    if not reasons:
+        return ""
+    name = profile.owner()
+    notes = [(_RETRY_NOTES.get(r) or "it broke one of the rules").format(name=name) for r in reasons]
+    return " REWRITE NOTE: an earlier draft was rejected because " + "; and ".join(notes) + "."
+
+
+def _record_rejection(path, reason: str, text: str, location: dict) -> None:
+    """Append a rejected draft to a private local file (owner-only), keeping the last 60."""
+    if not path:
+        return
+    try:
+        path = Path(path).expanduser()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        lines = path.read_text().splitlines()[-59:] if path.exists() else []
+        lines.append(json.dumps({"at": datetime.now().isoformat(timespec="seconds"), "reason": reason,
+                                 "location": location.get("status"), "draft": text}, ensure_ascii=False))
+        path.write_text("\n".join(lines) + "\n")
+        os.chmod(path, 0o600)
+    except Exception as exc:
+        log.warning("Could not record the rejected opening draft (%s).", type(exc).__name__)
+
+
 def welcome_block(
     api_key: str,
     weather_data: dict | None,
@@ -303,7 +345,10 @@ def welcome_block(
     reminders: dict | None = None,
     packages: dict | None = None,
     mention_history: dict | None = None,
+    rejections_path: str | Path | None = None,
 ) -> str | None:
+    """`rejections_path`: a private local file that keeps rejected drafts for diagnosis
+    (the shared log only ever gets reason codes)."""
     if not api_key:
         return None
     if not any((weather_data, calendar_events, nyt_stories, photo, tweet, reminders, packages)):
@@ -323,6 +368,8 @@ def welcome_block(
             if weather_data.get("travel_city") and weather_data.get("travel_confirmed"):
                 parts.append(f"Traveling to {weather_data['travel_city']} today.")
 
+        if calendar_events is None:
+            parts.append("CALENDAR: unavailable this morning. Do not mention the calendar or call the day empty or open.")
         if calendar_events:
             editorial_events = [e for e in dedupe_events(calendar_events)
                                 if not is_transit_option(e) and not _is_preparation_event(e)
@@ -445,13 +492,16 @@ def welcome_block(
         user_prompt = " ".join(parts)
 
         client = anthropic.Anthropic(api_key=api_key)
-        # The guards fail closed; a fresh draft usually avoids the rejected phrasing.
+        # The guards fail closed. Each retry names what the earlier drafts got wrong, so
+        # the model does not repeat the same phrasing three times.
+        seen_reasons: list[str] = []
         for attempt in range(1, OPENING_ATTEMPTS + 1):
+            prompt = user_prompt + _retry_note(seen_reasons)
             response = client.messages.create(
                 model=OPENING_MODEL,
                 max_tokens=320,
                 system=system_prompt(),
-                messages=[{"role": "user", "content": user_prompt}],
+                messages=[{"role": "user", "content": prompt}],
             )
             text = response.content[0].text.strip()
             reason = opening_rejection_reason(text, calendar_events=calendar_events,
@@ -461,6 +511,9 @@ def welcome_block(
                 return _normalize_paragraphs(text)
             # Reason codes only, never draft text: the log is not private.
             log.info("Opening draft %d/%d rejected: %s", attempt, OPENING_ATTEMPTS, reason)
+            _record_rejection(rejections_path, reason, text, location)
+            if reason not in seen_reasons:
+                seen_reasons.append(reason)
         log.warning("Opening omitted: all %d drafts were rejected.", OPENING_ATTEMPTS)
         return None
     except Exception as exc:
