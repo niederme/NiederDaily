@@ -327,3 +327,14 @@ def test_authored_tweet_heading_singular_and_fallback():
     this_year = str(date.today().year)
     assert f"You Tweeted · {this_year}" in _tweet_html({**TWEET_AUTHORED, "year": this_year})
     assert "You Tweeted<" in _tweet_html({**TWEET_AUTHORED, "year": ""})
+
+
+def test_list_time_is_fixed_width_column_on_desktop_and_mobile():
+    from renderer import BASE_STYLES
+    desktop = BASE_STYLES[BASE_STYLES.index(".list-time{"):]
+    desktop = desktop[:desktop.index("}")]
+    assert "flex:0 0 92px;" in desktop and "width:92px;" in desktop
+    assert "white-space:nowrap;" in desktop and "min-width" not in desktop
+    media = BASE_STYLES[BASE_STYLES.index("@media"):]
+    assert ".list-time{flex:0 0 92px !important;width:92px !important;}" in media
+    assert "min-width:62px" not in BASE_STYLES

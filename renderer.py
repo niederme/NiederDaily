@@ -50,9 +50,9 @@ a{color:#121212;}
 .supporting{font-size:13px;line-height:1.45;color:#474a51;margin-top:8px;}
 .list-row{display:flex;gap:18px;align-items:baseline;padding:0 0 11px;margin:0 0 11px;border-bottom:1px solid rgba(214,208,198,0.55);}
 .list-row:last-child{padding-bottom:0;margin-bottom:0;border-bottom:0;}
-.list-time{min-width:56px;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#474a51;}
+.list-time{flex:0 0 92px;width:92px;white-space:nowrap;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#474a51;}
 .list-main{flex:1;font-size:15px;line-height:1.35;color:#121212;}
-.list-time.pkg-today,.list-time.pkg-late{color:#ff453a;}
+.list-time.pkg-late{color:#ff453a;}
 .item-link{color:#121212;text-decoration:none;}
 .item-link:hover{text-decoration:underline;}
 .item-row-link{display:flex;gap:18px;align-items:baseline;width:100%;color:inherit;text-decoration:none;}
@@ -107,7 +107,7 @@ a{color:#121212;}
   .section-rule{margin-bottom:18px !important;}
   .list-row{display:block !important;padding-bottom:12px !important;margin-bottom:12px !important;}
   .item-row-link{display:block !important;}
-  .list-time{min-width:62px !important;flex-shrink:0;}
+  .list-time{flex:0 0 92px !important;width:92px !important;}
   .weather-place{font-size:15px !important;}
   .weather-line{font-size:15px !important;}
   .list-main{font-size:14px !important;}
@@ -449,8 +449,6 @@ def _tweet_html(tweet: dict, *, show_rule: bool = True) -> str:
 
 
 PACKAGE_ZONE = ZoneInfo("America/New_York")
-# Rows that need attention sort first, ahead of the date order.
-PACKAGE_URGENT = {"out for delivery", "failed delivery attempt", "delivery exception"}
 
 
 def _package_moment(day: str, time: str | None, source_zone: str | None) -> datetime:
@@ -503,7 +501,7 @@ def _package_when(expected: dict | None, status: str,
         return _package_day_range(first, last), "", first
     days = (first - today).days
     if days == 0:
-        return "Today", " pkg-today", first
+        return "Today", "", first
     if days == 1:
         return "Tomorrow", "", first
     if days <= 6:
@@ -568,8 +566,8 @@ def _packages_html(packages: dict, *, show_rule: bool = True,
         expected = package.get("expected_delivery")
         label, label_class, start = _package_when(expected, package["status"], today)
         entries.append((package, label, label_class, start))
-    entries.sort(key=lambda entry: (entry[0]["status"] not in PACKAGE_URGENT,
-                                    entry[3] is None, entry[3] or date.max))
+    # Date order only, undated rows last; the stable sort keeps incoming order for ties.
+    entries.sort(key=lambda entry: (entry[3] is None, entry[3] or date.max))
     for package, label, label_class, _start in entries:
         status = package["status"].capitalize()
         details = [status]
