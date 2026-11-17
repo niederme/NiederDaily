@@ -114,7 +114,7 @@ def test_optional_expected_window_event_in_two_column_row(tmp_path):
                               messages=None, photo=None, nyt=None, packages=summary,
                               as_of=date(2026, 10, 13)))
     row = html[html.index('class="list-row package-row"'):]
-    assert '<span class="list-time pkg-today">Today</span>' in row
+    assert '<span class="list-time">Today</span>' in row
     assert ('<span class="calendar-source calendar-line" style="color:#694122;">'
             '<span class="calendar-dot" style="background:#694122;"></span>UPS</span>'
             '<span class="calendar-title">Example Store · Mixing bowl</span>'
@@ -125,7 +125,8 @@ def test_optional_expected_window_event_in_two_column_row(tmp_path):
     for gone in (".package-carrier", ".package-name", ".package-detail",
                  ".package-event", ".list-row.package-row"):
         assert gone not in html
-    assert ".list-time.pkg-today,.list-time.pkg-late{color:#ff453a;}" in html
+    assert ".list-time.pkg-late{color:#ff453a;}" in html
+    assert "pkg-today" not in html
 
 
 def test_utc_timing_converts_to_new_york_with_date_rollover(tmp_path):
@@ -140,7 +141,7 @@ def test_utc_timing_converts_to_new_york_with_date_rollover(tmp_path):
                               weather=None, calendar=None, reminders=None,
                               messages=None, photo=None, nyt=None, packages=summary,
                               as_of=date(2026, 10, 12)))
-    assert '<span class="list-time pkg-today">Today</span>' in html
+    assert '<span class="list-time">Today</span>' in html
     assert ("Out for delivery · by 11pm · Arrived at carrier facility · 9:30pm"
             in html)
     assert " ET" not in html.split("Packages", 1)[1]
@@ -467,7 +468,7 @@ def _row(name, status="in transit", expected=None, event=None, carrier="ups"):
             "expected_delivery": expected, "latest_event": event}
 
 
-def test_rows_sort_urgent_first_then_by_date_with_calendar_style_labels():
+def test_rows_sort_by_date_with_calendar_style_labels():
     import re
     from renderer import _packages_html
     today = date(2026, 11, 16)
@@ -490,18 +491,34 @@ def test_rows_sort_urgent_first_then_by_date_with_calendar_style_labels():
     rows = re.findall(r'<span class="list-time([^"]*)">([^<]+)</span>.*?'
                       r'<span class="calendar-title">([^<]+)</span>', html)
     assert [(title, label, cls.strip()) for cls, label, title in rows] == [
-        ("Arriving", "Today", "pkg-today"),
-        ("Problem", "Fri", ""),
         ("Late", "Nov 14", "pkg-late"),
-        ("Today", "Today", "pkg-today"),
+        ("Today", "Today", ""),
+        ("Arriving", "Today", ""),
         ("Tomorrow", "Tomorrow", ""),
         ("Weekday window", "Wed–Thu", ""),
         ("Thursday", "Thu", ""),
+        ("Problem", "Fri", ""),
         ("Date window", "Nov 23–25", ""),
         ("Far", "Nov 24", ""),
         ("Undated", "No date", ""),
         ("Done", "Delivered", ""),
     ]
+
+
+def test_tomorrow_exception_sorts_after_today_rows():
+    import re
+    from renderer import _packages_html
+    today = date(2026, 11, 16)
+    shipments = [
+        _row("Exception", status="delivery exception", expected=_expected("2026-11-17")),
+        _row("Today A", expected=_expected("2026-11-16")),
+        _row("Today B", status="out for delivery", expected=_expected("2026-11-16")),
+    ]
+    html = _packages_html({"shipments": shipments, "freshness": "fresh",
+                           "truncated": False, "no_active": False,
+                           "refresh_succeeded": True, "coverage_note": None}, today=today)
+    titles = re.findall(r'<span class="calendar-title">([^<]+)</span>', html)
+    assert titles == ["Today A", "Today B", "Exception"]
 
 
 def test_event_and_window_times_use_calendar_clock_without_zone_note():
