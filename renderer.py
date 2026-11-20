@@ -48,35 +48,22 @@ a{color:#121212;}
 .weather-range{color:#6d7178;}
 .weather-summary{color:#474a51;}
 .supporting{font-size:13px;line-height:1.45;color:#474a51;margin-top:8px;}
-.list-row{display:flex;gap:18px;align-items:baseline;padding:0 0 11px;margin:0 0 11px;border-bottom:1px solid rgba(214,208,198,0.55);}
-.list-row:last-child{padding-bottom:0;margin-bottom:0;border-bottom:0;}
-.list-time{flex:0 0 92px;width:92px;white-space:nowrap;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#474a51;}
-.list-main{flex:1;font-size:15px;line-height:1.35;color:#121212;}
+.list-time{white-space:nowrap;}
 .list-time.pkg-late{color:#ff453a;}
 .item-link{color:#121212;text-decoration:none;}
 .item-link:hover{text-decoration:underline;}
-.item-row-link{display:flex;gap:18px;align-items:baseline;width:100%;color:inherit;text-decoration:none;}
-.item-row-link:hover .list-main{text-decoration:underline;}
 .list-meta{display:block;font-size:12px;line-height:1.4;color:#474a51;margin-top:4px;}
 .meta-sep{color:#9aa0a6;margin:0 6px;}
-.calendar-source{display:inline-flex;align-items:center;gap:6px;font-weight:700;white-space:nowrap;}
-.calendar-dot{display:inline-block;width:8px;height:8px;border-radius:999px;flex-shrink:0;}
-.calendar-line{display:flex;font-size:12px;line-height:1.4;margin-bottom:3px;}
+.calendar-source{font-weight:700;}
+.calendar-line{display:block;font-size:12px;line-height:17px;margin-bottom:3px;}
 .calendar-title{display:block;font-weight:600;}
 .calendar-location{display:block;font-weight:400;color:#6d7178;}
 .reminder-group{margin:0 0 18px;}.reminder-group:last-child{margin-bottom:0;}
 .reminder-list{font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#6d7178;margin:0 0 8px;}
-.reminder-row{display:flex;align-items:center;gap:10px;padding:0 0 9px;margin:0 0 9px;border-bottom:1px solid rgba(214,208,198,0.55);}
-.reminder-row:last-child{padding-bottom:0;margin-bottom:0;border-bottom:0;}
-.reminder-check{display:inline-block;width:14px;height:14px;border:2px solid #6d7178;border-radius:999px;box-sizing:border-box;flex-shrink:0;}
-.reminder-title{flex:1;font-size:15px;line-height:1.35;color:#121212;}
-.reminder-status{font-size:12px;color:#6d7178;white-space:nowrap;}
+.reminder-status{white-space:nowrap;}
 .reminder-overdue{color:#ff453a;font-weight:600;}
 .msg-summary{max-width:520px;font-size:16px;line-height:1.55;color:#474a51;}
-.nyt{display:flex;gap:20px;align-items:flex-start;padding:0 0 16px;margin:0 0 16px;border-bottom:1px solid rgba(214,208,198,0.55);}
-.nyt:last-child{padding-bottom:0;margin-bottom:0;border-bottom:0;}
-.nyt-link{display:flex;gap:20px;align-items:flex-start;width:100%;color:inherit;text-decoration:none;}
-.nytthumb{width:175px;height:117px;object-fit:cover;object-position:right center;flex-shrink:0;background:#f5efe5;}
+.nytthumb{object-fit:cover;object-position:right center;}
 .nythed{font-size:17px;font-weight:700;line-height:1.18;color:#121212;margin-bottom:6px;}
 .nytdek{font-size:13px;color:#474a51;line-height:1.42;}
 .nytmeta{font-size:10px;color:#6d7178;line-height:1.4;letter-spacing:0.025em;text-transform:uppercase;margin-top:7px;}
@@ -105,22 +92,17 @@ a{color:#121212;}
   .logo{font-size:36px !important;margin-bottom:12px !important;}
   .welcome{font-size:16px !important;line-height:1.45 !important;}
   .section-rule{margin-bottom:18px !important;}
-  .list-row{display:block !important;padding-bottom:12px !important;margin-bottom:12px !important;}
-  .item-row-link{display:block !important;}
-  .list-time{flex:0 0 92px !important;width:92px !important;}
   .weather-place{font-size:15px !important;}
   .weather-line{font-size:15px !important;}
   .list-main{font-size:14px !important;}
   .list-meta{font-size:11px !important;line-height:1.45 !important;}
-  .calendar-source{white-space:normal !important;}
   .msg-summary{font-size:15px !important;line-height:1.5 !important;}
-  .nyt{display:flex !important;gap:10px !important;align-items:flex-start !important;padding-bottom:16px !important;margin-bottom:16px !important;}
-  .nyt-link{display:flex !important;gap:10px !important;align-items:flex-start !important;}
-  .nytthumb{display:block !important;width:112px !important;height:75px !important;max-width:none !important;flex-shrink:0 !important;margin:0 !important;}
+  .nyt-thumb-cell{width:112px !important;padding-left:10px !important;}
+  .nytthumb{width:112px !important;height:75px !important;}
   .nythed{font-size:16px !important;margin-bottom:5px !important;}
   .nytdek{font-size:12px !important;line-height:1.45 !important;}
   .nytmeta{font-size:11px !important;margin-top:6px !important;}
-  .photo-meta{font-size:11px !important;gap:8px !important;}
+  .photo-meta{font-size:11px !important;}
   .tweet-card{padding:14px 14px 12px !important;border-radius:12px !important;}
   .tweet-text{font-size:16px !important;line-height:1.45 !important;}
   .tweet-meta{font-size:11px !important;margin-top:10px !important;}
@@ -149,11 +131,47 @@ def _linked_text(item_type: str, text: str, payload: dict) -> str:
     return f'<a class="item-link" href="{_esc(href)}">{_esc(text)}</a>'
 
 
-def _row_link(item_type: str, time_html: str, main_html: str, payload: dict) -> str:
+# Gmail on the web ignores flex and gap, so every row that puts things side
+# by side is a table, and its layout lives in inline styles.
+ROW_RULE = "#e8e5e0"  # the old rgba(214,208,198,0.55) rule, flattened onto white
+TABLE_OPEN = ('<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" '
+              'style="width:100%;border-collapse:collapse;border-spacing:0;">')
+
+
+def _row_edges(index: int, count: int, pad: int) -> str:
+    """Padding and the hairline between rows: none above the first row, none below the last."""
+    top = f"padding-top:{pad}px;border-top:1px solid {ROW_RULE};" if index else "padding-top:0;"
+    bottom = f"padding-bottom:{pad}px;" if index < count - 1 else "padding-bottom:0;"
+    return top + bottom
+
+
+def _source_line(name: str, color: str, *, dot: bool = True) -> str:
+    """Calendar or carrier name, bold in its color, after a small dot."""
+    dot_html = ""
+    if dot:
+        dot_html = (f'<span class="calendar-dot" style="display:inline-block;width:8px;height:8px;'
+                    f'border-radius:4px;background:{color};vertical-align:middle;margin:0 6px 2px 0;'
+                    f'font-size:0;line-height:0;"></span>')
+    return (f'<span class="calendar-source calendar-line" style="color:{color};">{dot_html}{name}</span>')
+
+
+def _list_row(item_type: str, label: str, main_html: str, payload: dict, index: int, count: int,
+              *, label_class: str = "", row_class: str = "list-row") -> str:
+    """One Calendar or Packages row: a fixed 92px label column, then the details."""
+    edges = _row_edges(index, count, 11)
+    color = ACCENT if "pkg-late" in label_class else MUTED
     href = _shortcut_url(item_type, payload)
-    if not href:
-        return f'<div style="display:flex;gap:18px;align-items:baseline;width:100%;">{time_html}{main_html}</div>'
-    return f'<a class="item-row-link" href="{_esc(href)}">{time_html}{main_html}</a>'
+    if href:
+        main_html = f'<a href="{_esc(href)}" style="color:inherit;text-decoration:none;">{main_html}</a>'
+    return (
+        f'<tr class="{row_class}">'
+        f'<td width="92" valign="top" style="width:92px;padding-right:18px;vertical-align:top;'
+        f'white-space:nowrap;font-size:11px;line-height:17px;font-weight:700;letter-spacing:0.06em;'
+        f'text-transform:uppercase;color:{color};{edges}">'
+        f'<span class="list-time{label_class}">{label}</span></td>'
+        f'<td class="list-main" valign="top" style="vertical-align:top;font-size:15px;line-height:1.35;'
+        f'color:{INK};{edges}">{main_html}</td></tr>'
+    )
 
 
 # Maps condition label (lowercased keyword) -> emoji. First match wins, so
@@ -237,16 +255,12 @@ def _calendar_html(events: list, *, show_rule: bool = True) -> str:
     if not events:
         return _section("Calendar", '<div class="supporting">Nothing on the calendar.</div>', show_rule=show_rule)
     rows = []
-    for e in events:
+    for index, e in enumerate(events):
         time_str = _esc(e.get("time") or "All day")
         source = ""
         if e.get("calendar"):
-            dot = ""
-            if e.get("calendar_color"):
-                dot = f'<span class="calendar-dot" style="background:{_esc(e["calendar_color"])};"></span>'
             color = _esc(e.get("calendar_color") or "#6d7178")
-            source = (f'<span class="calendar-source calendar-line" style="color:{color};">'
-                      f'{dot}{_esc(e["calendar"])}</span>')
+            source = _source_line(_esc(e["calendar"]), color, dot=bool(e.get("calendar_color")))
         loc = ""
         if e.get("location"):
             loc = f'<span class="calendar-location">{_esc(e["location"])}</span>'
@@ -258,16 +272,9 @@ def _calendar_html(events: list, *, show_rule: bool = True) -> str:
             "location": e.get("location"),
             "title": e["title"],
         }
-        time_html = f'<span class="list-time">{time_str}</span>'
-        main_html = (
-            f'<span class="list-main">{source}'
-            f'<span class="calendar-title">{_esc(e["title"])}</span>{loc}</span>'
-        )
-        rows.append(
-            f'<div class="list-row">'
-            f'{_row_link("calendar", time_html, main_html, payload)}</div>'
-        )
-    return _section("Calendar", "".join(rows), show_rule=show_rule)
+        main_html = f'{source}<span class="calendar-title">{_esc(e["title"])}</span>{loc}'
+        rows.append(_list_row("calendar", time_str, main_html, payload, index, len(events)))
+    return _section("Calendar", f'{TABLE_OPEN}{"".join(rows)}</table>', show_rule=show_rule)
 
 
 # Reminders are grouped by list in this order (case-insensitive); other lists
@@ -302,34 +309,49 @@ def _reminders_html(data: dict, *, show_rule: bool = True) -> str:
 
     # Stable sort keeps overdue -> today order within each list.
     items.sort(key=lambda item: _reminder_group_key(item[0].get("list")))
-    groups: list[tuple[str, list[str]]] = []
+    groups: list[tuple[str, list]] = []
     for r, status_html in items:
         list_name = (r.get("list") or "").strip()
-        color = r.get("list_color") or MUTED
-        payload = {"identifier": r.get("identifier"), "due": r.get("due"), "list": r.get("list"), "title": r["title"]}
-        row = (
-            f'<div class="reminder-row">'
-            f'<span class="reminder-check" style="border-color:{_esc(color)};"></span>'
-            f'<span class="reminder-title">{_linked_text("reminder", r["title"], payload)}</span>'
-            f'{status_html}</div>'
-        )
         if not groups or groups[-1][0] != list_name:
             groups.append((list_name, []))
-        groups[-1][1].append(row)
+        groups[-1][1].append((r, status_html))
 
     parts = []
-    for list_name, rows in groups:
-        heading = f'<div class="reminder-list">{_esc(list_name)}</div>' if list_name else ""
-        parts.append(f'<div class="reminder-group">{heading}{"".join(rows)}</div>')
+    for group_index, (list_name, members) in enumerate(groups):
+        rows = []
+        for index, (r, status_html) in enumerate(members):
+            color = _esc(r.get("list_color") or MUTED)
+            payload = {"identifier": r.get("identifier"), "due": r.get("due"), "list": r.get("list"), "title": r["title"]}
+            edges = _row_edges(index, len(members), 9)
+            rows.append(
+                f'<tr class="reminder-row">'
+                f'<td width="14" valign="middle" style="width:14px;padding-right:10px;vertical-align:middle;{edges}">'
+                f'<div class="reminder-check" style="width:10px;height:10px;border:2px solid {color};'
+                f'border-color:{color};border-radius:7px;font-size:0;line-height:0;">&nbsp;</div></td>'
+                f'<td class="reminder-title" valign="middle" style="vertical-align:middle;font-size:15px;'
+                f'line-height:1.35;color:{INK};{edges}">{_linked_text("reminder", r["title"], payload)}</td>'
+                f'<td align="right" valign="middle" style="text-align:right;vertical-align:middle;'
+                f'white-space:nowrap;padding-left:12px;font-size:12px;color:#6d7178;{edges}">{status_html}</td>'
+                f'</tr>'
+            )
+        heading = ""
+        if list_name:
+            heading = f'<div class="reminder-list">{_esc(list_name)}</div>'
+        gap = "margin:0 0 18px;" if group_index < len(groups) - 1 else "margin:0;"
+        parts.append(f'<div class="reminder-group" style="{gap}">{heading}{TABLE_OPEN}{"".join(rows)}</table></div>')
     return _section("Reminders", "".join(parts), show_rule=show_rule)
 
 
 def _nyt_html(stories: list, *, show_rule: bool = True) -> str:
     rows = []
-    for s in stories:
+    for index, s in enumerate(stories):
         img = ""
         if s.get("thumbnail"):
-            img = f'<img class="nytthumb" src="{_esc(s["thumbnail"])}" alt="">'
+            img = (f'<td class="nyt-thumb-cell" width="175" valign="top" style="width:175px;padding-left:20px;'
+                   f'vertical-align:top;{_row_edges(index, len(stories), 16)}">'
+                   f'<a href="{_esc(s["url"])}"><img class="nytthumb" src="{_esc(s["thumbnail"])}" alt="" '
+                   f'width="175" height="117" style="display:block;width:175px;height:117px;border:0;'
+                   f'background:#f5efe5;"></a></td>')
         meta_bits = []
         published_date = s.get("published_date")
         if published_date:
@@ -348,11 +370,12 @@ def _nyt_html(stories: list, *, show_rule: bool = True) -> str:
             meta_bits.append(s["byline"])
         meta = f'<div class="nytmeta">{_esc(" · ".join(meta_bits))}</div>' if meta_bits else ""
         rows.append(
-            f'<div class="nyt"><a class="nyt-link" href="{_esc(s["url"])}">'
-            f'<div style="flex:1;"><div class="nythed">{_esc(s["title"])}</div>'
-            f'<div class="nytdek">{_esc(s["abstract"])}</div>{meta}</div>{img}</a></div>'
+            f'<tr class="nyt"><td valign="top" style="vertical-align:top;{_row_edges(index, len(stories), 16)}">'
+            f'<a href="{_esc(s["url"])}" style="color:inherit;text-decoration:none;">'
+            f'<div class="nythed">{_esc(s["title"])}</div>'
+            f'<div class="nytdek">{_esc(s["abstract"])}</div>{meta}</a></td>{img}</tr>'
         )
-    return _section("Top Stories", "".join(rows), show_rule=show_rule)
+    return _section("Top Stories", f'{TABLE_OPEN}{"".join(rows)}</table>', show_rule=show_rule)
 
 
 def _photo_html(photo: tuple, *, show_rule: bool = True) -> str:
@@ -568,7 +591,8 @@ def _packages_html(packages: dict, *, show_rule: bool = True,
         entries.append((package, label, label_class, start))
     # Date order only, undated rows last; the stable sort keeps incoming order for ties.
     entries.sort(key=lambda entry: (entry[3] is None, entry[3] or date.max))
-    for package, label, label_class, _start in entries:
+    package_rows = []
+    for index, (package, label, label_class, _start) in enumerate(entries):
         status = package["status"].capitalize()
         details = [status]
         window = _package_window(package.get("expected_delivery"))
@@ -583,16 +607,15 @@ def _packages_html(packages: dict, *, show_rule: bool = True,
         carrier, color = PACKAGE_CARRIERS.get(carrier_code, (carrier_code.upper() or "Carrier", "#121212"))
         labels = [value for value in (package.get("company"), package.get("item")) if value]
         name = " · ".join(labels) if labels else "Package"
-        time_html = f'<span class="list-time{label_class}">{_esc(label)}</span>'
         main_html = (
-            f'<span class="list-main">'
-            f'<span class="calendar-source calendar-line" style="color:{color};">'
-            f'<span class="calendar-dot" style="background:{color};"></span>{_esc(carrier)}</span>'
+            f'{_source_line(_esc(carrier), color)}'
             f'<span class="calendar-title">{_esc(name)}</span>'
-            f'<span class="calendar-location">{_esc(" · ".join(details))}</span></span>'
+            f'<span class="calendar-location">{_esc(" · ".join(details))}</span>'
         )
-        rows.append(f'<div class="list-row package-row">'
-                    f'{_row_link("package", time_html, main_html, {})}</div>')
+        package_rows.append(_list_row("package", _esc(label), main_html, {}, index, len(entries),
+                                      label_class=label_class, row_class="list-row package-row"))
+    if package_rows:
+        rows.append(f'{TABLE_OPEN}{"".join(package_rows)}</table>')
     if (packages.get("no_active") and packages.get("freshness") == "fresh"
             and packages.get("refresh_succeeded") is True):
         rows.append('<div class="supporting">No active packages.</div>')

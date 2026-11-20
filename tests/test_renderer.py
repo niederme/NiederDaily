@@ -315,9 +315,11 @@ def test_calendar_source_is_bold_in_its_calendar_color():
         reminders=None, messages=None, photo=None, nyt=None)
     html = _html_from_message(msg)
     assert ('<span class="calendar-source calendar-line" style="color:#0088FF;">'
-            '<span class="calendar-dot" style="background:#0088FF;"></span>Personal</span>') in html
+            '<span class="calendar-dot" style="display:inline-block;width:8px;height:8px;border-radius:4px;'
+            'background:#0088FF;vertical-align:middle;margin:0 6px 2px 0;font-size:0;line-height:0;"></span>'
+            'Personal</span>') in html
     assert '<span class="calendar-source calendar-line" style="color:#6d7178;">Other</span>' in html
-    assert ".calendar-source{display:inline-flex;align-items:center;gap:6px;font-weight:700;white-space:nowrap;}" in html
+    assert ".calendar-source{font-weight:700;}" in html
 
 
 def test_authored_tweet_heading_singular_and_fallback():
@@ -330,11 +332,25 @@ def test_authored_tweet_heading_singular_and_fallback():
 
 
 def test_list_time_is_fixed_width_column_on_desktop_and_mobile():
-    from renderer import BASE_STYLES
-    desktop = BASE_STYLES[BASE_STYLES.index(".list-time{"):]
-    desktop = desktop[:desktop.index("}")]
-    assert "flex:0 0 92px;" in desktop and "width:92px;" in desktop
-    assert "white-space:nowrap;" in desktop and "min-width" not in desktop
-    media = BASE_STYLES[BASE_STYLES.index("@media"):]
-    assert ".list-time{flex:0 0 92px !important;width:92px !important;}" in media
-    assert "min-width:62px" not in BASE_STYLES
+    msg = render_email(recipient="me@example.com", welcome=None,
+        weather=None, calendar=CALENDAR, reminders=None, messages=None, photo=None, nyt=None)
+    html = _html_from_message(msg)
+    cell = html[html.index('<td width="92"'):]
+    cell = cell[:cell.index(">")]
+    assert "width:92px;" in cell and "white-space:nowrap;" in cell
+    assert "min-width:62px" not in html
+
+
+def test_layout_avoids_css_gmail_web_ignores():
+    """Gmail on the web drops flex and gap, which broke the rows there."""
+    reminders = {"overdue": [{"title": "Pay bill", "due": "2026-03-20", "list": "Niedertodo", "list_color": "#0088FF"}],
+                 "today": [{"title": "Return books", "due": "2026-03-21", "list": "Niedertodo"}], "upcoming": []}
+    msg = render_email(recipient="me@example.com", welcome=None, weather=WEATHER, calendar=CALENDAR,
+                       reminders=reminders, messages=None, photo=PHOTO, nyt=NYT, tweet=TWEET_AUTHORED)
+    html = _html_from_message(msg)
+    for banned in ("display:flex", "inline-flex", "gap:", "flex:", "flex-shrink", "align-items"):
+        assert banned not in html, banned
+    # Reminder status sits in its own right-aligned cell, not right after the title.
+    row = html[html.index('class="reminder-row"'):]
+    row = row[:row.index("</tr>")]
+    assert '<td align="right"' in row and "Overdue" in row.split('<td align="right"')[1]

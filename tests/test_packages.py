@@ -116,7 +116,8 @@ def test_optional_expected_window_event_in_two_column_row(tmp_path):
     row = html[html.index('class="list-row package-row"'):]
     assert '<span class="list-time">Today</span>' in row
     assert ('<span class="calendar-source calendar-line" style="color:#694122;">'
-            '<span class="calendar-dot" style="background:#694122;"></span>UPS</span>'
+            '<span class="calendar-dot" style="display:inline-block;width:8px;height:8px;border-radius:4px;'
+            'background:#694122;vertical-align:middle;margin:0 6px 2px 0;font-size:0;line-height:0;"></span>UPS</span>'
             '<span class="calendar-title">Example Store · Mixing bowl</span>'
             '<span class="calendar-location">Out for delivery · 10am–2pm · '
             'Arrived at carrier facility · Sun 9:30am</span>') in row
@@ -326,7 +327,8 @@ def test_carrier_colors_and_unknown_fallback_with_untrusted_labels(tmp_path):
                         ("USPS", "#1165A3"), ("Swiship", "#121212"),
                         ("OTHERCARRIER", "#121212")):
         assert (f'class="calendar-source calendar-line" style="color:{color};">'
-                f'<span class="calendar-dot" style="background:{color};"></span>'
+                f'<span class="calendar-dot" style="display:inline-block;width:8px;height:8px;border-radius:4px;'
+                f'background:{color};vertical-align:middle;margin:0 6px 2px 0;font-size:0;line-height:0;"></span>'
                 f'{name}</span>') in html
     assert "Private Purchase" not in html and "Secret Item" not in html
 
