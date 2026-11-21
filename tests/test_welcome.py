@@ -856,13 +856,9 @@ def test_system_prompt_covers_ownership_addresses_and_links():
     prompt = system_prompt()
     assert "Never write a street address" in prompt
     assert "Only an event whose owner is Jordan is Jordan's plan" in prompt
-    assert "never connect a reminder to an event" in prompt
+    assert "describe a reminder only by what it literally asks" in prompt
 
 
-@pytest.mark.parametrize("text", [
-    "A hauling crew comes this afternoon, and the patio chairs are on the list, so that lines up well.",
-    "The cleanup ties in nicely with the crew's visit.",
-    "Good timing, too: the crew arrives the same afternoon.",
-])
-def test_invented_links_between_items_are_rejected(text):
-    assert validate_opening(text, calendar_events=EVENTS, weather_data=WEATHER) is None
+def test_plausible_link_between_reminder_and_event_is_allowed():
+    text = "A hauling crew comes this afternoon, handy if the patio chairs go into the shed."
+    assert validate_opening(text, calendar_events=EVENTS, weather_data=WEATHER)

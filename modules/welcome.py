@@ -60,8 +60,9 @@ _BASE_PROMPT = (
     "Each calendar event lists its owner. Only an event whose owner is {name} is {name}'s plan. "
     "When the owner is someone else or not stated, never write 'you have', 'your', or 'you're meeting' about it, and never call it a date or plan of {name}'s; "
     "name it neutrally as being on the calendar (for example, 'dinner with Sam is on the calendar tonight') or leave it out. "
-    "Reminders and calendar events are separate records: never connect a reminder to an event, or say one helps, fits, or lines up with the other, "
-    "unless the reminder's own words name that event. Describe a reminder only by what it literally asks: putting something away is not clearing it out or getting rid of it. "
+    "A connection between a reminder and an event is welcome when it is plausible, but keep each one accurate: "
+    "describe a reminder only by what it literally asks (putting something away is not clearing it out or getting rid of it), "
+    "describe an event only by what it is, and offer the link as an idea, not as a fact the inputs establish. "
     "Write with confidence about what the inputs say and leave out what they do not: never hedge or comment on missing detail "
     "(no 'somewhere in the middle', 'specifics aren't clear', 'from here', 'it seems', 'apparently', 'presumably'). "
     "When the day is quiet or context is sparse, keep the opening brief and factual; do not manufacture an angle."
@@ -376,7 +377,6 @@ _RETRY_NOTES = {
     "nag": "it said how long something has waited. Do not",
     "schedule_recital": "it listed clock times. Use no clock times",
     "street_address": "it gave a street address. Name the venue or town only",
-    "linked_items": "it tied a reminder or event to another one (lines up, ties in, good timing). Keep them separate",
     "reminder_inferred_urgency": "it judged a reminder's urgency (urgent, not urgent, soon, on the horizon). Just name it",
     "reminder_inferred_age": "it said how old a reminder is. Do not",
     "reminder_changed_action": "it changed what a reminder asks (a check is not a call or an order). Use its own action",
@@ -742,12 +742,6 @@ _NAG_CLAIM = re.compile(
     r"it's\s+been\s+a\s+while|for\s+a\s+while\s+now|since\s+(?:late|early|mid)[\s-]+\w+|"
     r"(?:days|weeks)\s+overdue|still\s+(?:waiting|pending|outstanding)|overdue\s+and|"
     r"waiting\s+(?:for|on)\s+(?:attention|you|a\s+moment))\b", re.I)
-# Editorial glue that ties two records together ("so that lines up well"): the inputs never
-# establish those links, and the drafts that used it misread what the items were.
-_LINK_CLAIM = re.compile(
-    r"\b(?:lines?\s+up|lined\s+up|ties?\s+in(?:\s+with|\s+nicely)?|dovetails?|"
-    r"(?:good|perfect|nice|handy|great)\s+timing|timing\s+works|works\s+out\s+(?:well|nicely)|"
-    r"conveniently|goes\s+hand\s+in\s+hand|pairs?\s+(?:well|nicely)\s+with)\b", re.I)
 # Three or more clock times means the opening is reciting the schedule.
 _CLOCK_TIME = re.compile(r"\b\d{1,2}:\d{2}\b|\b\d{1,2}\s*(?:a\.?m\.?|p\.?m\.?)", re.I)
 
@@ -789,8 +783,6 @@ def opening_rejection_reason(text, *, calendar_events=None, weather_data=None, r
         return "schedule_recital"
     if _STREET_ADDRESS.search(text):
         return "street_address"
-    if _LINK_CLAIM.search(text):
-        return "linked_items"
     return opening_rejection(text, calendar_events or [], reminders, packages)
 
 
