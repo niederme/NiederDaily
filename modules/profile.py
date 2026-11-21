@@ -32,6 +32,8 @@ DEFAULTS = {
     "home_label": None,
     # Title prefixes for items that belong to someone else in the household: {"AB": "Alex"}.
     "household_prefixes": {},
+    # Calendars the household shares: unprefixed items there may be someone else's plan.
+    "shared_calendars": [],
     # Calendars that are the reader's own (subscribed calendars never place the reader anywhere).
     "own_calendars": [],
     # Title substring -> context sentence for recurring people or events.

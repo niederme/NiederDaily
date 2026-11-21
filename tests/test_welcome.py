@@ -787,3 +787,78 @@ def test_package_words_do_not_count_as_a_second_reminder():
 def test_retry_note_covers_reminder_urgency():
     from modules.welcome import _retry_note
     assert "urgency" in _retry_note(["reminder_inferred_urgency"])
+
+
+# Street addresses, shared-calendar ownership, and reminder/event links.
+
+@pytest.mark.parametrize("raw, place", [
+    ("Corner Barber 85 Main St, Springfield, NJ 07000, United States", "Corner Barber"),
+    ("65 Main St Springfield, NY, United States", "Springfield"),
+    ("12 Oak Avenue, Shelbyville, NY 10900", "Shelbyville"),
+    ("1200 Route 17, Shelbyville, NY", "Shelbyville"),
+    ("Town Hall, 77 Main Street, Springfield", "Town Hall"),
+    ("Shelbyville", "Shelbyville"),
+])
+def test_event_place_is_venue_or_town_never_street(raw, place):
+    from modules.welcome import _short_place
+    assert _short_place(raw) == place
+
+
+def test_prompt_places_carry_no_street_address(mocker):
+    events = [{"time": "12:00pm", "title": "Piano lesson", "all_day": False, "calendar": "Home",
+               "location": "65 Main St Shelbyville, NY, United States"}]
+    prompt = _simple_prompt(mocker, events)
+    assert "place: Shelbyville" in prompt
+    assert "65 Main" not in prompt
+
+
+@pytest.mark.parametrize("text", [
+    "A midday stop at 65 Main St for the piano lesson.",
+    "The lesson is at 12 Oak Avenue this afternoon.",
+])
+def test_street_address_in_opening_is_rejected(text):
+    assert validate_opening(text, calendar_events=EVENTS, weather_data=WEATHER) is None
+
+
+def test_numbers_without_a_street_still_pass():
+    assert validate_opening("Two meetings and 3 deliveries make a busy Saturday.",
+                            calendar_events=EVENTS, weather_data=WEATHER)
+
+
+def test_unprefixed_event_on_shared_calendar_is_not_assumed_the_readers(mocker):
+    events = [
+        {"time": "11:30am", "title": "JD: Haircut", "all_day": False, "calendar": "Family"},
+        {"time": "7:00pm", "title": "Dinner with Sam", "all_day": False, "calendar": "Family"},
+        {"time": "9:00am", "title": "Run", "all_day": False, "calendar": "Personal"},
+    ]
+    prompt = _simple_prompt(mocker, events)
+    options = prompt.split("CALENDAR OPTIONS", 1)[1].split(" / ")
+    line = {title: next(o for o in options if title in o) for title in ("JD: Haircut", "Dinner with Sam", "] Run")}
+    assert "owner: Jordan" in line["JD: Haircut"]
+    assert "shared household calendar" in line["Dinner with Sam"] and "not Jordan's" in line["Dinner with Sam"]
+    assert "owner: unknown" in line["] Run"]
+
+
+def test_configured_shared_calendar_marks_unprefixed_events(mocker):
+    profile.configure({**PROFILE, "shared_calendars": ["Family"]})
+    events = [{"time": "7:00pm", "title": "Dinner with Sam", "all_day": False, "calendar": "family"}]
+    prompt = _simple_prompt(mocker, events)
+    assert "shared household calendar" in prompt
+
+
+def test_household_prefix_sets_owner(mocker):
+    events = [{"time": "7:00pm", "title": "AB: Dinner with Sam", "all_day": False, "calendar": "Family"}]
+    assert "owner: Alex" in _simple_prompt(mocker, events)
+
+
+def test_system_prompt_covers_ownership_addresses_and_links():
+    from modules.welcome import system_prompt
+    prompt = system_prompt()
+    assert "Never write a street address" in prompt
+    assert "Only an event whose owner is Jordan is Jordan's plan" in prompt
+    assert "describe a reminder only by what it literally asks" in prompt
+
+
+def test_plausible_link_between_reminder_and_event_is_allowed():
+    text = "A hauling crew comes this afternoon, handy if the patio chairs go into the shed."
+    assert validate_opening(text, calendar_events=EVENTS, weather_data=WEATHER)
