@@ -58,7 +58,9 @@ _BASE_PROMPT = (
     "When an event lists a place, say where it is if you mention it, by the venue or town given (for example, an evening appointment in Springfield). "
     "Never write a street address or house number; the Calendar section has the address. "
     "Each calendar event lists its owner. Only an event whose owner is {name} is {name}'s plan. "
-    "When the owner is someone else or not stated, never write 'you have', 'your', or 'you're meeting' about it, and never call it a date or plan of {name}'s; "
+    "When the owner is someone else, never write 'you have', 'your', or 'you're meeting' about it, and never call it a date or plan of {name}'s. "
+    "When the owner is not stated on a shared calendar, a plan the whole household would share (a family visit, a show, a holiday outing) can be described as {name}'s day too; "
+    "but a one-on-one plan with a named person (a date, dinner, drinks, or a night out with someone) may be someone else's: "
     "name it neutrally as being on the calendar (for example, 'dinner with Sam is on the calendar tonight') or leave it out. "
     "A connection between a reminder and an event is welcome when it is plausible, but keep each one accurate: "
     "describe a reminder only by what it literally asks (putting something away is not clearing it out or getting rid of it), "
@@ -138,8 +140,8 @@ def _event_owner(event: dict, shared: set[str]) -> str:
     if owner:
         return owner
     if (event.get("calendar") or "").casefold() in shared:
-        return (f"not stated; shared household calendar, so this may be another household member's plan, "
-                f"not {profile.owner()}'s")
+        return ("not stated; shared household calendar: a family plan, or another household member's own "
+                "plan if it is one-on-one with someone")
     return "unknown"
 
 

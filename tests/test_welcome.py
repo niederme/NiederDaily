@@ -835,7 +835,7 @@ def test_unprefixed_event_on_shared_calendar_is_not_assumed_the_readers(mocker):
     options = prompt.split("CALENDAR OPTIONS", 1)[1].split(" / ")
     line = {title: next(o for o in options if title in o) for title in ("JD: Haircut", "Dinner with Sam", "] Run")}
     assert "owner: Jordan" in line["JD: Haircut"]
-    assert "shared household calendar" in line["Dinner with Sam"] and "not Jordan's" in line["Dinner with Sam"]
+    assert "shared household calendar" in line["Dinner with Sam"] and "one-on-one" in line["Dinner with Sam"]
     assert "owner: unknown" in line["] Run"]
 
 
@@ -856,6 +856,7 @@ def test_system_prompt_covers_ownership_addresses_and_links():
     prompt = system_prompt()
     assert "Never write a street address" in prompt
     assert "Only an event whose owner is Jordan is Jordan's plan" in prompt
+    assert "a plan the whole household would share" in prompt
     assert "describe a reminder only by what it literally asks" in prompt
 
 
