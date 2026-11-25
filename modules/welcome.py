@@ -440,6 +440,7 @@ def welcome_block(
         date_str = today.strftime("%B %-d, %Y")
 
         parts = [f"Today is {day_name}, {date_str}."]
+        reminder_part = None
         location = derive_location(calendar_events, weather_data)
         parts.append(location_line(location))
 
@@ -531,6 +532,7 @@ def welcome_block(
             if reminder_lines:
                 # One candidate only: given a list, the model recites it, and more than one
                 # named reminder fails the guard. The Reminders section shows the rest.
+                reminder_part = len(parts)
                 parts.append("REMINDER (the only one the opening may mention, or leave it out): "
                              + reminder_lines[0])
 
@@ -573,6 +575,9 @@ def welcome_block(
         # A generated Messages quip is not reliable evidence of an unanswered message.
 
         user_prompt = " ".join(parts)
+        # Everything the model was told except the one REMINDER: a draft that repeats these
+        # words is retelling the day, not naming a second reminder that happens to share them.
+        prompt_context = " ".join(p for i, p in enumerate(parts) if i != reminder_part)
 
         client = anthropic.Anthropic(api_key=api_key)
         # The guards fail closed. Each retry names what the earlier drafts got wrong, so
@@ -589,7 +594,8 @@ def welcome_block(
             text = response.content[0].text.strip()
             reason = opening_rejection_reason(text, calendar_events=calendar_events,
                                               weather_data=weather_data, reminders=reminders,
-                                              packages=packages, location=location)
+                                              packages=packages, location=location,
+                                              prompt_context=prompt_context)
             if reason is None:
                 return _normalize_paragraphs(text)
             # Reason codes only, never draft text: the log is not private.
@@ -652,11 +658,14 @@ _GENERIC_REMINDER_WORDS = {"check", "night", "today", "call", "make", "more", "a
 
 
 def _named_reminder_count(text: str, reminders: dict | None, calendar_events: list,
-                          packages: dict | None = None) -> int:
+                          packages: dict | None = None, prompt_context: str | None = None) -> int:
     """How many distinct reminders a draft names, by words only that reminder has.
 
-    Words shared by two reminders, words found in the day's event titles or package rows,
-    and generic task words never count, so one mention is never counted twice.
+    Words shared by two reminders, words found in the day's events (titles and places),
+    package rows or the rest of the prompt, and generic task words never count, so one
+    mention is never counted twice and retelling the day never counts at all. The check
+    covers every open reminder, most of which the model never saw, so a single common
+    word ("home", "game") that one of them happens to share is not evidence.
     """
     if not isinstance(reminders, dict):
         return 0
@@ -669,6 +678,8 @@ def _named_reminder_count(text: str, reminders: dict | None, calendar_events: li
     event_words = set()
     for event in calendar_events or []:
         event_words |= _content_words(event.get("title"))
+        event_words |= _content_words(event.get("location"))
+    event_words |= _content_words(prompt_context)
     for row in package_context(packages):
         event_words |= _content_words(" ".join(str(row.get(k) or "") for k in ("company", "item", "status")))
     event_words |= _DELIVERY_WORDS
@@ -757,7 +768,7 @@ def _normalize_paragraphs(text: str) -> str:
 
 
 def opening_rejection_reason(text, *, calendar_events=None, weather_data=None, reminders=None,
-                             packages=None, location=None) -> str | None:
+                             packages=None, location=None, prompt_context=None) -> str | None:
     """Name the first guard a draft trips (a non-private code), or None if it passes."""
     if not isinstance(text, str) or not text.strip():
         return "empty"
@@ -777,7 +788,8 @@ def opening_rejection_reason(text, *, calendar_events=None, weather_data=None, r
         return "location_echo"
     if _invented_reminder(text, reminders, calendar_events or []):
         return "invented_reminder"
-    if _named_reminder_count(text, reminders, calendar_events or [], packages) > 1:
+    if _named_reminder_count(text, reminders, calendar_events or [], packages,
+                             prompt_context) > 1:
         return "too_many_reminders"
     if _NAG_CLAIM.search(text):
         return "nag"
