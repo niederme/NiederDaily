@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from modules.opening_safety import calendar_kind, opening_rejection, package_context
-from modules.welcome import welcome_block, validate_opening
+from modules.welcome import opening_rejection_reason, welcome_block, validate_opening
 
 DELIVERIES = [
     {"title": "Example Store - Carrier", "calendar": "Parcel", "time": "2:00pm", "end_time": "4:00pm", "all_day": False},
@@ -192,3 +192,34 @@ def test_listing_several_reminders_keeps_their_own_actions(text):
 ])
 def test_reminder_inventions_still_rejected_in_lists(text):
     assert validate_opening(text, reminders=TODAY_REMINDERS) is None
+
+
+# --- A second reminder only counts when the draft uses words the prompt did not give it ---
+MANY_REMINDERS = {
+    "today": [{"title": "Get shrimp", "due": "2026-11-25", "list": "Groceries"}],
+    "upcoming": [
+        {"title": "Book home inspection", "due": "2026-11-30", "list": "House"},
+        {"title": "Arena parking pass", "due": "2026-11-29", "list": "House"},
+    ],
+}
+GAME_NIGHT = [{"title": "Visitors at Hosts", "time": "7:00 PM", "location": "Lakeside Arena"}]
+
+
+def test_retelling_the_day_does_not_count_as_a_second_reminder():
+    text = ("You're working from home today. The visitors play the hosts tonight at Lakeside Arena.\n\n"
+            "The shrimp is on the list.")
+    context = "LOCATION: home today. CALENDAR OPTIONS: Visitors at Hosts (evening; place: Lakeside Arena)."
+    assert opening_rejection_reason(text, calendar_events=GAME_NIGHT, reminders=MANY_REMINDERS,
+                                    prompt_context=context) is None
+
+
+def test_event_place_alone_does_not_count_as_a_reminder():
+    text = "The visitors play the hosts tonight at Lakeside Arena. The shrimp is on the list."
+    assert opening_rejection_reason(text, calendar_events=GAME_NIGHT,
+                                    reminders=MANY_REMINDERS) != "too_many_reminders"
+
+
+def test_naming_a_reminder_the_prompt_never_gave_still_fails():
+    text = "The shrimp is on the list, and so is the inspection."
+    assert opening_rejection_reason(text, calendar_events=GAME_NIGHT, reminders=MANY_REMINDERS,
+                                    prompt_context="LOCATION: home today.") == "too_many_reminders"
